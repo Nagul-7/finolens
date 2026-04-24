@@ -1,0 +1,118 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: #081425;
+  --color-surface: #081425;
+  --color-surface-dim: #081425;
+  --color-surface-container-lowest: #040e1f;
+  --color-surface-container-low: #111c2d;
+  --color-surface-container: #152031;
+  --color-surface-container-high: #1f2a3c;
+  --color-surface-container-highest: #2a3548;
+  --color-surface-variant: #2a3548;
+  --color-surface-bright: #2f3a4c;
+  --color-on-background: #d8e3fb;
+  --color-on-surface: #d8e3fb;
+  --color-on-surface-variant: #bacac2;
+  --color-primary: #46f1c5;
+  --color-primary-container: #00d4aa;
+  --color-primary-fixed: #55fcd0;
+  --color-primary-fixed-dim: #28dfb5;
+  --color-on-primary: #00382b;
+  --color-on-primary-container: #005643;
+  --color-on-primary-fixed: #002118;
+  --color-on-primary-fixed-variant: #00513f;
+  --color-inverse-primary: #006b55;
+  --color-secondary: #c0c6db;
+  --color-secondary-container: #404758;
+  --color-secondary-fixed: #dce2f7;
+  --color-secondary-fixed-dim: #c0c6db;
+  --color-on-secondary: #293040;
+  --color-on-secondary-container: #aeb5c9;
+  --color-on-secondary-fixed: #141b2b;
+  --color-on-secondary-fixed-variant: #404758;
+  --color-tertiary: #ffcea6;
+  --color-tertiary-container: #ffa858;
+  --color-tertiary-fixed: #ffdcc1;
+  --color-tertiary-fixed-dim: #ffb77a;
+  --color-on-tertiary: #4c2700;
+  --color-on-tertiary-container: #733e00;
+  --color-on-tertiary-fixed: #2e1500;
+  --color-on-tertiary-fixed-variant: #6c3a00;
+  --color-error: #ffb4ab;
+  --color-error-container: #93000a;
+  --color-on-error: #690005;
+  --color-on-error-container: #ffdad6;
+  --color-outline: #85948d;
+  --color-outline-variant: #3b4a44;
+  --color-inverse-surface: #d8e3fb;
+  --color-inverse-on-surface: #263143;
+  --color-surface-tint: #28dfb5;
+
+  --font-size-headline-lg: 24px;
+  --line-height-headline-lg: 32px;
+  --font-size-headline-md: 18px;
+  --line-height-headline-md: 24px;
+  --font-size-body-sm: 14px;
+  --line-height-body-sm: 20px;
+  --font-size-label-caps: 11px;
+  --line-height-label-caps: 16px;
+  --font-size-data-mono: 13px;
+  --line-height-data-mono: 16px;
+}
+
+* {
+  font-family: 'Inter', sans-serif;
+}
+
+body {
+  background-color: #081425;
+  color: #d8e3fb;
+  -webkit-font-smoothing: antialiased;
+}
+
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
+}
+
+.icon-fill {
+  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+@keyframes pulse-slow {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.9); }
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.2); }
+}
+
+.animate-pulse-dot {
+  animation: pulse-dot 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #3b4a44; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #85948d; }

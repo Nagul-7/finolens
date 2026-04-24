@@ -1,0 +1,28 @@
+import axios from 'axios'
+
+export const api = axios.create({ baseURL: 'http://localhost:5000/api' })
+
+export const getDashboardData       = ()             => api.get('/dashboard')
+export const getQuote               = (symbol)        => api.get(`/market/quote/${symbol}`)
+export const getOHLCV               = (symbol, interval = '1d') => api.get(`/market/ohlcv/${symbol}`, { params: { interval } })
+export const getIndex               = ()             => api.get('/market/index')
+export const getCalls               = (symbol)        => api.get(`/calls/${symbol}`)
+export const getSignals             = (symbol)        => api.get(`/technical/${symbol}`)
+export const getOptionsChain        = (symbol)        => api.get(`/options/chain/${symbol}`)
+export const getScreener            = (filters)       => api.post('/screener', filters)
+export const getWatchlist           = ()             => api.get('/watchlist')
+export const addToWatchlist         = (symbol)        => api.post('/watchlist', { symbol })
+export const removeFromWatchlist    = (symbol)        => api.delete(`/watchlist/${symbol}`)
+export const getWatchlistQuotes     = ()             => api.get('/watchlist/quotes')
+export const runBacktest            = (params)        => api.post('/backtest/run', params)
+export const getAlgoStrategies      = ()             => api.get('/algo/strategies')
+export const saveAlgoStrategy       = (data)          => api.post('/algo/strategies', data)
+export const toggleStrategy         = (id)            => api.post(`/algo/strategies/${id}/toggle`)
+export const stopAllAlgo            = ()             => api.post('/algo/stop-all')
+export const getAlgoPositions       = ()             => api.get('/algo/positions')
+export const getAlgoTrades          = ()             => api.get('/algo/trades')
+export const getAlgoPnlToday        = ()             => api.get('/algo/pnl/today')
+export const exitAlgoPosition       = (id)            => api.post(`/algo/positions/${id}/exit`)
+export const getAlgoTradesHistory   = ()             => api.get('/algo/trades/history')
+export const getAlgoLogs            = ()             => api.get('/algo/logs')
+

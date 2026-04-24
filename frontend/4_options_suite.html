@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Options Suite - NIFTY</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "surface-container-highest": "#2a3548",
+                        "surface-variant": "#2a3548",
+                        "secondary-container": "#404758",
+                        "on-primary-fixed-variant": "#00513f",
+                        "surface-container-high": "#1f2a3c",
+                        "primary-container": "#00d4aa",
+                        "on-tertiary": "#4c2700",
+                        "on-secondary-fixed-variant": "#404758",
+                        "surface-container-lowest": "#040e1f",
+                        "surface-container-low": "#111c2d",
+                        "on-surface-variant": "#bacac2",
+                        "secondary-fixed": "#dce2f7",
+                        "on-tertiary-fixed-variant": "#6c3a00",
+                        "on-surface": "#d8e3fb",
+                        "inverse-primary": "#006b55",
+                        "surface-bright": "#2f3a4c",
+                        "on-primary": "#00382b",
+                        "surface-tint": "#28dfb5",
+                        "primary": "#46f1c5",
+                        "on-background": "#d8e3fb",
+                        "on-secondary-fixed": "#141b2b",
+                        "surface-container": "#152031",
+                        "error": "#ffb4ab",
+                        "tertiary-container": "#ffa858",
+                        "secondary-fixed-dim": "#c0c6db",
+                        "outline": "#85948d",
+                        "inverse-surface": "#d8e3fb",
+                        "tertiary-fixed": "#ffdcc1",
+                        "tertiary-fixed-dim": "#ffb77a",
+                        "on-error": "#690005",
+                        "inverse-on-surface": "#263143",
+                        "on-primary-fixed": "#002118",
+                        "surface": "#081425",
+                        "on-primary-container": "#005643",
+                        "on-error-container": "#ffdad6",
+                        "outline-variant": "#3b4a44",
+                        "on-secondary": "#293040",
+                        "error-container": "#93000a",
+                        "primary-fixed": "#55fcd0",
+                        "on-secondary-container": "#aeb5c9",
+                        "on-tertiary-fixed": "#2e1500",
+                        "surface-dim": "#081425",
+                        "secondary": "#c0c6db",
+                        "on-tertiary-container": "#733e00",
+                        "tertiary": "#ffcea6",
+                        "background": "#081425",
+                        "primary-fixed-dim": "#28dfb5"
+                    },
+                    borderRadius: {
+                        DEFAULT: "0.125rem",
+                        lg: "0.25rem",
+                        xl: "0.5rem",
+                        full: "0.75rem"
+                    },
+                    spacing: {
+                        unit: "4px",
+                        "density-high": "0.25rem",
+                        "component-gap": "0.5rem",
+                        gutter: "1rem",
+                        "container-padding": "1.5rem"
+                    },
+                    fontFamily: {
+                        "headline-md": ["Inter"],
+                        "label-caps": ["Inter"],
+                        "data-mono": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "body-sm": ["Inter"]
+                    },
+                    fontSize: {
+                        "headline-md": ["18px", { lineHeight: "24px", letterSpacing: "-0.01em", fontWeight: "600" }],
+                        "label-caps": ["11px", { lineHeight: "16px", letterSpacing: "0.05em", fontWeight: "700" }],
+                        "data-mono": ["13px", { lineHeight: "16px", letterSpacing: "0.02em", fontWeight: "500" }],
+                        "headline-lg": ["24px", { lineHeight: "32px", letterSpacing: "-0.02em", fontWeight: "600" }],
+                        "body-sm": ["14px", { lineHeight: "20px", fontWeight: "400" }]
+                    }
+                }
+            }
+        };
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined[data-weight="fill"] {
+            font-variation-settings: 'FILL' 1;
+        }
+    </style>
+</head>
+<body class="bg-[#0a0e1a] text-on-background font-body-sm min-h-screen flex flex-col md:flex-row">
+<!-- Side Nav (Web) -->
+<nav class="hidden md:flex fixed left-0 top-0 h-full flex-col z-40 w-16 md:w-60 border-r border-[#1e293b] bg-[#0a0e1a]">
+<div class="flex flex-col items-center justify-center h-16 border-b border-[#1e293b] w-full">
+<span class="text-primary-container font-headline-md tracking-tighter">TRADING TERMINAL</span>
+</div>
+<div class="p-4 flex flex-col items-center md:items-start gap-2 border-b border-[#1e293b]">
+<img alt="User Profile" class="w-8 h-8 rounded-full mb-2" data-alt="close up of a modern corporate professional in a sharp suit against a dark grey studio background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB3svgs2ZxRmeX6k2ahlcubTQGYgyTwV7x-N47Dn0a_woTCYWw-avl6kJLiIQAVWRpVCM_yN2HsqPu9CK66Tczptgm6dclgjEQ_EoYcb-AQ-dhlL_dqS7_S9zDqysVo9g1ZuzEBsdXZfg7VZYQfYh4S9k2t8YeZOxJo1_YZAdXUN_t1Vil3T02FcYoR58Zm-3lLZbdEksEz2SC4ZEetD_OR6YwX3-3AVf4ftsOO1YCgLjbD9jpeG-L2cNxF0Zg12ozgnz1ELJbITyI"/>
+<div class="hidden md:block">
+<div class="font-headline-md text-on-background text-sm">Institutional Pro</div>
+<div class="font-data-mono text-secondary text-xs">Terminal ID: 8829</div>
+</div>
+</div>
+<ul class="flex flex-col flex-1 mt-4">
+<li class="w-full">
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-slate-300 hover:bg-[#111827] transition-all duration-150 font-label-caps uppercase" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="hidden md:block">HOME</span>
+</a>
+</li>
+<li class="w-full">
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-slate-300 hover:bg-[#111827] transition-all duration-150 font-label-caps uppercase" href="#">
+<span class="material-symbols-outlined" data-icon="psychology">psychology</span>
+<span class="hidden md:block">INTELLIGENCE</span>
+</a>
+</li>
+<li class="w-full">
+<a class="flex items-center gap-3 px-4 py-3 bg-[#111827] text-[#00d4aa] border-l-2 border-[#00d4aa] font-label-caps uppercase" href="#">
+<span class="material-symbols-outlined" data-icon="query_stats" data-weight="fill">query_stats</span>
+<span class="hidden md:block">OPTIONS</span>
+</a>
+</li>
+<li class="w-full">
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-slate-300 hover:bg-[#111827] transition-all duration-150 font-label-caps uppercase" href="#">
+<span class="material-symbols-outlined" data-icon="filter_alt">filter_alt</span>
+<span class="hidden md:block">SCREENER</span>
+</a>
+</li>
+<li class="w-full">
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-slate-300 hover:bg-[#111827] transition-all duration-150 font-label-caps uppercase" href="#">
+<span class="material-symbols-outlined" data-icon="history">history</span>
+<span class="hidden md:block">BACKTEST</span>
+</a>
+</li>
+<li class="w-full">
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-slate-300 hover:bg-[#111827] transition-all duration-150 font-label-caps uppercase" href="#">
+<span class="material-symbols-outlined" data-icon="smart_toy">smart_toy</span>
+<span class="hidden md:block">ALGO</span>
+</a>
+</li>
+<li class="w-full">
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-slate-300 hover:bg-[#111827] transition-all duration-150 font-label-caps uppercase" href="#">
+<span class="material-symbols-outlined" data-icon="format_list_bulleted">format_list_bulleted</span>
+<span class="hidden md:block">WATCHLIST</span>
+</a>
+</li>
+<li class="w-full">
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-slate-300 hover:bg-[#111827] transition-all duration-150 font-label-caps uppercase" href="#">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+<span class="hidden md:block">ALERTS</span>
+</a>
+</li>
+</ul>
+</nav>
+<!-- Main Content Area -->
+<div class="flex-1 flex flex-col md:ml-60 w-full mb-16 md:mb-0">
+<!-- Top App Bar -->
+<header class="flex justify-between items-center px-4 h-12 w-full bg-[#0a0e1a] border-b border-[#1e293b] sticky top-0 z-30">
+<div class="flex items-center gap-4">
+<span class="text-lg font-black tracking-tighter text-[#00d4aa] md:hidden">TRADING TERMINAL</span>
+<div class="hidden md:flex gap-2">
+<div class="flex items-center gap-1 bg-[#00d4aa1a] px-2 py-0.5 rounded text-[#00d4aa] font-label-caps">
+<div class="w-1.5 h-1.5 rounded-full bg-[#00d4aa] animate-pulse"></div>
+                        NIFTY LIVE
+                    </div>
+<div class="flex items-center gap-1 bg-[#1e293b] px-2 py-0.5 rounded text-secondary font-label-caps border border-[#334155]">
+                        BANKNIFTY
+                    </div>
+</div>
+</div>
+<div class="flex items-center gap-4 text-slate-400">
+<span class="material-symbols-outlined cursor-pointer hover:text-on-background transition-colors" data-icon="account_balance_wallet">account_balance_wallet</span>
+<span class="material-symbols-outlined cursor-pointer hover:text-on-background transition-colors" data-icon="settings">settings</span>
+<span class="material-symbols-outlined cursor-pointer hover:text-on-background transition-colors md:hidden" data-icon="account_circle">account_circle</span>
+</div>
+</header>
+<!-- Canvas -->
+<main class="p-4 flex-1 flex flex-col gap-4">
+<!-- Context Header -->
+<div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-2">
+<div>
+<h1 class="font-headline-lg text-on-background">NIFTY Options Suite</h1>
+<div class="font-data-mono text-secondary mt-1 flex gap-4">
+<span>Spot: <span class="text-on-background">₹22,145.50</span></span>
+<span class="text-[#00d4aa]">+0.45%</span>
+</div>
+</div>
+<div class="flex gap-2">
+<select class="bg-[#111827] border border-[#1e293b] text-on-background font-data-mono rounded px-3 py-1.5 focus:border-[#00d4aa] focus:ring-1 focus:ring-[#00d4aa] outline-none">
+<option>28 MAR 2024</option>
+<option>04 APR 2024</option>
+</select>
+<button class="bg-[#111827] border border-[#1e293b] hover:bg-[#1e293b] text-on-background font-label-caps rounded px-4 py-1.5 transition-colors">
+                        FILTERS
+                    </button>
+</div>
+</div>
+<!-- Top Grid: AI Signal & Gauges -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+<!-- AI Signal Card -->
+<div class="bg-[#111827] border border-[#1e293b] rounded-lg p-4 col-span-1 md:col-span-2 relative overflow-hidden group">
+<div class="absolute top-0 right-0 w-32 h-32 bg-[#00d4aa] opacity-5 rounded-full blur-2xl group-hover:opacity-10 transition-opacity"></div>
+<div class="flex items-center gap-2 mb-3">
+<span class="material-symbols-outlined text-primary-container" data-icon="psychology">psychology</span>
+<h3 class="font-label-caps text-secondary uppercase tracking-widest">AI Market Signal</h3>
+</div>
+<div class="font-headline-lg text-[#00d4aa] mb-2">BULLISH MOMENTUM - CE BUY</div>
+<p class="font-body-sm text-secondary mb-4 max-w-2xl">
+                        Heavy Put writing observed at 22,000 and 22,100 levels. Call unwinding at 22,200 suggests resistance shifting higher. PCR indicates structural strength. Target 22,350.
+                    </p>
+<div class="flex gap-2 font-data-mono text-sm">
+<span class="bg-[#0a0e1a] border border-[#1e293b] px-2 py-1 rounded text-on-background">Entry: ₹22,160</span>
+<span class="bg-[#0a0e1a] border border-[#1e293b] px-2 py-1 rounded text-[#00d4aa]">Target: ₹22,350</span>
+<span class="bg-[#0a0e1a] border border-[#1e293b] px-2 py-1 rounded text-error">SL: ₹22,080</span>
+</div>
+</div>
+<!-- PCR Gauge -->
+<div class="bg-[#111827] border border-[#1e293b] rounded-lg p-4 flex flex-col items-center justify-center">
+<h3 class="font-label-caps text-secondary uppercase tracking-widest self-start w-full mb-4">PCR Dial</h3>
+<div class="relative w-40 h-20 overflow-hidden flex justify-center items-end border-b-2 border-[#1e293b] pb-2">
+<!-- Semi-circle arch -->
+<div class="absolute w-36 h-36 border-[12px] border-[#1e293b] border-t-error border-l-error border-r-[#00d4aa] rounded-full top-4"></div>
+<!-- Needle -->
+<div class="w-1 h-16 bg-on-background absolute bottom-0 origin-bottom rounded-t-full rotate-[35deg] transition-transform duration-1000"></div>
+<div class="w-3 h-3 bg-on-background rounded-full absolute -bottom-1.5 z-10"></div>
+</div>
+<div class="text-center mt-4">
+<div class="font-headline-lg text-on-background">1.24</div>
+<div class="font-label-caps text-[#00d4aa] mt-1">BULLISH ZONE</div>
+</div>
+<div class="flex justify-between w-full font-label-caps text-secondary text-[9px] mt-2 px-2">
+<span class="text-error">BEARISH</span>
+<span>NEUTRAL</span>
+<span class="text-[#00d4aa]">BULLISH</span>
+</div>
+</div>
+</div>
+<!-- Options Chain Table Component -->
+<div class="bg-[#111827] border border-[#1e293b] rounded-lg overflow-hidden flex flex-col mt-4">
+<div class="p-3 border-b border-[#1e293b] flex justify-between items-center bg-[#0a0e1a]">
+<h2 class="font-label-caps text-on-background uppercase tracking-widest">Options Chain Data</h2>
+<div class="font-data-mono text-xs flex gap-4">
+<span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-[#00d4aa1a] border border-[#00d4aa]"></span> ITM Calls</span>
+<span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-[#ffb4ab1a] border border-error"></span> ITM Puts</span>
+<span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full border border-tertiary-container bg-tertiary-container/10"></span> Max Pain</span>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse min-w-[800px]">
+<thead>
+<tr class="font-label-caps text-secondary border-b border-[#1e293b] bg-[#111827]">
+<th class="p-2 border-r border-[#1e293b] text-center" colspan="5">CALLS</th>
+<th class="p-2 border-r border-[#1e293b] text-center text-on-background bg-[#1c2533]">STRIKE</th>
+<th class="p-2 text-center" colspan="5">PUTS</th>
+</tr>
+<tr class="font-label-caps text-secondary border-b border-[#1e293b] bg-[#0a0e1a]">
+<th class="p-2 text-right font-normal">OI (L)</th>
+<th class="p-2 text-right font-normal">OI Chng</th>
+<th class="p-2 text-right font-normal">Vol</th>
+<th class="p-2 text-right font-normal">IV</th>
+<th class="p-2 text-right font-normal border-r border-[#1e293b]">LTP</th>
+<th class="p-2 text-center border-r border-[#1e293b] bg-[#1c2533]">PRICE</th>
+<th class="p-2 text-left font-normal">LTP</th>
+<th class="p-2 text-left font-normal">IV</th>
+<th class="p-2 text-left font-normal">Vol</th>
+<th class="p-2 text-left font-normal">OI Chng</th>
+<th class="p-2 text-left font-normal">OI (L)</th>
+</tr>
+</thead>
+<tbody class="font-data-mono text-sm">
+<!-- Strike 21900 -->
+<tr class="border-b border-[#1e293b] hover:bg-[#1e293b] transition-colors">
+<td class="p-2 text-right bg-[#00d4aa]/10">14.2</td>
+<td class="p-2 text-right text-error bg-[#00d4aa]/10">-1.4</td>
+<td class="p-2 text-right bg-[#00d4aa]/10">45k</td>
+<td class="p-2 text-right bg-[#00d4aa]/10">14.2</td>
+<td class="p-2 text-right text-[#00d4aa] border-r border-[#1e293b] bg-[#00d4aa]/10">₹285.50</td>
+<td class="p-2 text-center font-bold text-on-background border-r border-[#1e293b] bg-[#1c2533]">21,900</td>
+<td class="p-2 text-left text-error">₹14.20</td>
+<td class="p-2 text-left">16.8</td>
+<td class="p-2 text-left">120k</td>
+<td class="p-2 text-left text-[#00d4aa]">+4.2</td>
+<td class="p-2 text-left">32.5</td>
+</tr>
+<!-- Strike 22000 (Max Pain) -->
+<tr class="border-b border-[#1e293b] hover:bg-[#1e293b] transition-colors border-l-2 border-l-tertiary-container relative">
+<td class="p-2 text-right bg-[#00d4aa]/10">28.5</td>
+<td class="p-2 text-right text-[#00d4aa] bg-[#00d4aa]/10">+2.1</td>
+<td class="p-2 text-right bg-[#00d4aa]/10">180k</td>
+<td class="p-2 text-right bg-[#00d4aa]/10">13.8</td>
+<td class="p-2 text-right text-[#00d4aa] border-r border-[#1e293b] bg-[#00d4aa]/10">₹195.00</td>
+<td class="p-2 text-center font-bold text-tertiary-container border-r border-[#1e293b] bg-[#1c2533] relative">
+                                    22,000
+                                    <span class="absolute right-0 top-1/2 -translate-y-1/2 -mr-8 text-[9px] text-tertiary-container font-label-caps hidden md:block">MAX PAIN</span>
+</td>
+<td class="p-2 text-left text-error">₹38.50</td>
+<td class="p-2 text-left">15.5</td>
+<td class="p-2 text-left">210k</td>
+<td class="p-2 text-left text-[#00d4aa]">+12.5</td>
+<td class="p-2 text-left">45.2</td>
+</tr>
+<!-- Strike 22100 -->
+<tr class="border-b border-[#1e293b] hover:bg-[#1e293b] transition-colors">
+<td class="p-2 text-right bg-[#00d4aa]/10">35.2</td>
+<td class="p-2 text-right text-[#00d4aa] bg-[#00d4aa]/10">+5.4</td>
+<td class="p-2 text-right bg-[#00d4aa]/10">250k</td>
+<td class="p-2 text-right bg-[#00d4aa]/10">13.5</td>
+<td class="p-2 text-right text-[#00d4aa] border-r border-[#1e293b] bg-[#00d4aa]/10">₹112.40</td>
+<td class="p-2 text-center font-bold text-on-background border-r border-[#1e293b] bg-[#1c2533]">22,100</td>
+<td class="p-2 text-left text-error">₹85.20</td>
+<td class="p-2 text-left">14.9</td>
+<td class="p-2 text-left">185k</td>
+<td class="p-2 text-left text-[#00d4aa]">+8.4</td>
+<td class="p-2 text-left">28.1</td>
+</tr>
+<!-- Strike 22200 (Spot approx) -->
+<tr class="border-b-2 border-b-[#00d4aa] hover:bg-[#1e293b] transition-colors">
+<td class="p-2 text-right">48.9</td>
+<td class="p-2 text-right text-[#00d4aa]">+14.2</td>
+<td class="p-2 text-right">450k</td>
+<td class="p-2 text-right">13.2</td>
+<td class="p-2 text-right text-error border-r border-[#1e293b]">₹54.80</td>
+<td class="p-2 text-center font-bold text-on-background border-r border-[#1e293b] bg-[#1c2533]">22,200</td>
+<td class="p-2 text-left text-[#00d4aa] bg-error/10">₹145.60</td>
+<td class="p-2 text-left bg-error/10">14.5</td>
+<td class="p-2 text-left bg-error/10">150k</td>
+<td class="p-2 text-left text-error bg-error/10">-2.1</td>
+<td class="p-2 text-left bg-error/10">15.4</td>
+</tr>
+<!-- Strike 22300 -->
+<tr class="border-b border-[#1e293b] hover:bg-[#1e293b] transition-colors">
+<td class="p-2 text-right">55.4</td>
+<td class="p-2 text-right text-[#00d4aa]">+18.5</td>
+<td class="p-2 text-right">380k</td>
+<td class="p-2 text-right">13.6</td>
+<td class="p-2 text-right text-error border-r border-[#1e293b]">₹22.15</td>
+<td class="p-2 text-center font-bold text-on-background border-r border-[#1e293b] bg-[#1c2533]">22,300</td>
+<td class="p-2 text-left text-[#00d4aa] bg-error/10">₹225.80</td>
+<td class="p-2 text-left bg-error/10">15.2</td>
+<td class="p-2 text-left bg-error/10">85k</td>
+<td class="p-2 text-left text-error bg-error/10">-0.5</td>
+<td class="p-2 text-left bg-error/10">8.2</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</main>
+</div>
+<!-- Bottom Nav Bar (Mobile) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full h-16 bg-[#0a0e1a] border-t border-[#1e293b] z-40">
+<ul class="flex justify-around items-center h-full w-full">
+<li class="flex-1">
+<a class="flex flex-col items-center justify-center gap-1 h-full text-slate-500" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="dashboard">dashboard</span>
+<span class="text-[9px] font-label-caps uppercase">HOME</span>
+</a>
+</li>
+<li class="flex-1">
+<a class="flex flex-col items-center justify-center gap-1 h-full text-slate-500" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="psychology">psychology</span>
+<span class="text-[9px] font-label-caps uppercase">INTEL</span>
+</a>
+</li>
+<li class="flex-1 relative">
+<a class="flex flex-col items-center justify-center gap-1 h-full text-[#00d4aa] bg-[#111827]" href="#">
+<div class="absolute top-0 left-0 w-full h-[2px] bg-[#00d4aa]"></div>
+<span class="material-symbols-outlined text-[20px]" data-icon="query_stats" data-weight="fill">query_stats</span>
+<span class="text-[9px] font-label-caps uppercase">OPTIONS</span>
+</a>
+</li>
+<li class="flex-1">
+<a class="flex flex-col items-center justify-center gap-1 h-full text-slate-500" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="filter_alt">filter_alt</span>
+<span class="text-[9px] font-label-caps uppercase">SCREEN</span>
+</a>
+</li>
+</ul>
+</nav>
+</body></html>

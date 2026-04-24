@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Strategy Backtest - FinoLens</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-highest": "#2a3548",
+                        "on-surface-variant": "#bacac2",
+                        "inverse-on-surface": "#263143",
+                        "surface-container-high": "#1f2a3c",
+                        "on-tertiary-fixed": "#2e1500",
+                        "tertiary-fixed": "#ffdcc1",
+                        "primary-fixed-dim": "#28dfb5",
+                        "tertiary-container": "#ffa858",
+                        "primary-container": "#00d4aa",
+                        "inverse-surface": "#d8e3fb",
+                        "primary": "#46f1c5",
+                        "on-tertiary-container": "#733e00",
+                        "surface-dim": "#081425",
+                        "surface": "#081425",
+                        "secondary-fixed-dim": "#c0c6db",
+                        "error-container": "#93000a",
+                        "on-background": "#d8e3fb",
+                        "on-primary": "#00382b",
+                        "tertiary-fixed-dim": "#ffb77a",
+                        "surface-container": "#152031",
+                        "surface-container-low": "#111c2d",
+                        "on-primary-container": "#005643",
+                        "inverse-primary": "#006b55",
+                        "outline": "#85948d",
+                        "on-tertiary-fixed-variant": "#6c3a00",
+                        "surface-tint": "#28dfb5",
+                        "secondary-container": "#404758",
+                        "on-secondary-fixed": "#141b2b",
+                        "secondary": "#c0c6db",
+                        "on-tertiary": "#4c2700",
+                        "surface-variant": "#2a3548",
+                        "secondary-fixed": "#dce2f7",
+                        "outline-variant": "#3b4a44",
+                        "background": "#081425",
+                        "on-error-container": "#ffdad6",
+                        "primary-fixed": "#55fcd0",
+                        "surface-bright": "#2f3a4c",
+                        "on-surface": "#d8e3fb",
+                        "surface-container-lowest": "#040e1f",
+                        "on-secondary-fixed-variant": "#404758",
+                        "on-primary-fixed-variant": "#00513f",
+                        "on-secondary-container": "#aeb5c9",
+                        "error": "#ffb4ab",
+                        "on-error": "#690005",
+                        "tertiary": "#ffcea6",
+                        "on-secondary": "#293040",
+                        "on-primary-fixed": "#002118"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "unit": "4px",
+                        "component-gap": "0.5rem",
+                        "gutter": "1rem",
+                        "container-padding": "1.5rem",
+                        "density-high": "0.25rem"
+                    },
+                    "fontFamily": {
+                        "headline-lg": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "label-caps": ["Inter"],
+                        "data-mono": ["Inter"],
+                        "headline-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-lg": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+                        "body-sm": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "label-caps": ["11px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700" }],
+                        "data-mono": ["13px", { "lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "500" }],
+                        "headline-md": ["18px", { "lineHeight": "24px", "letterSpacing": "-0.01em", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style type="text/tailwindcss">
+        @layer utilities {
+            .material-symbols-outlined {
+                font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            }
+            .material-symbols-outlined.fill-icon {
+                font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            }
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body-sm antialiased selection:bg-primary-container selection:text-on-primary-container flex flex-col min-h-screen overflow-x-hidden">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 flex justify-between items-center h-14 px-4 bg-[#0a0e1a] border-b border-[#1e293b]">
+<div class="flex items-center gap-6">
+<span class="text-xl font-black tracking-tighter text-[#00d4aa]">FinoLens Terminal</span>
+<div class="hidden md:flex items-center gap-4 font-['Inter'] text-sm tracking-tight antialiased">
+<span class="text-[#00d4aa] font-bold">NIFTY 50: 22,140.40 (+0.45%)</span>
+<span class="text-slate-400">BANK NIFTY: 47,280.15 (-0.12%)</span>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<button class="text-slate-400 hover:bg-[#1e293b] transition-colors scale-95 active:opacity-80 p-2 rounded flex items-center justify-center">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-slate-400 hover:bg-[#1e293b] transition-colors scale-95 active:opacity-80 p-2 rounded flex items-center justify-center">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<button class="text-slate-400 hover:bg-[#1e293b] transition-colors scale-95 active:opacity-80 p-2 rounded flex items-center justify-center">
+<span class="material-symbols-outlined">account_circle</span>
+</button>
+</div>
+</header>
+<!-- SideNavBar (Desktop) -->
+<nav class="hidden md:flex flex-col w-64 fixed left-0 top-14 bottom-0 z-40 bg-[#111827] border-r border-[#1e293b]">
+<div class="p-4 border-b border-[#1e293b]">
+<h2 class="text-[#00d4aa] font-bold text-lg leading-tight">FinoLens</h2>
+<p class="font-['Inter'] text-xs font-semibold uppercase tracking-widest text-slate-500">Institutional</p>
+</div>
+<ul class="flex flex-col py-2">
+<li>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-slate-200 hover:bg-[#1e293b] transition-all duration-150 font-['Inter'] text-xs font-semibold uppercase tracking-widest" href="#">
+<span class="material-symbols-outlined">dashboard</span> Home
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-slate-200 hover:bg-[#1e293b] transition-all duration-150 font-['Inter'] text-xs font-semibold uppercase tracking-widest" href="#">
+<span class="material-symbols-outlined">query_stats</span> Intelligence
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-slate-200 hover:bg-[#1e293b] transition-all duration-150 font-['Inter'] text-xs font-semibold uppercase tracking-widest" href="#">
+<span class="material-symbols-outlined">analytics</span> Options
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-slate-200 hover:bg-[#1e293b] transition-all duration-150 font-['Inter'] text-xs font-semibold uppercase tracking-widest" href="#">
+<span class="material-symbols-outlined">filter_alt</span> Screener
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-3 text-[#00d4aa] border-l-2 border-[#00d4aa] bg-[#00d4aa1a] transition-all duration-150 font-['Inter'] text-xs font-semibold uppercase tracking-widest" href="#">
+<span class="material-symbols-outlined">history</span> Backtest
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-slate-200 hover:bg-[#1e293b] transition-all duration-150 font-['Inter'] text-xs font-semibold uppercase tracking-widest" href="#">
+<span class="material-symbols-outlined">visibility</span> Watchlist
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-slate-200 hover:bg-[#1e293b] transition-all duration-150 font-['Inter'] text-xs font-semibold uppercase tracking-widest" href="#">
+<span class="material-symbols-outlined">notifications_active</span> Alerts
+                </a>
+</li>
+</ul>
+</nav>
+<!-- Main Content Canvas -->
+<main class="flex-1 pt-14 pb-16 md:pb-0 md:pl-64 flex flex-col">
+<div class="p-gutter flex-1 flex flex-col gap-gutter max-w-[1600px] w-full mx-auto">
+<!-- Header Area -->
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-outline-variant pb-4">
+<div>
+<div class="flex items-center gap-2 mb-1">
+<span class="relative flex h-2 w-2">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary-container opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2 w-2 bg-primary-container"></span>
+</span>
+<span class="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-widest">Market Open</span>
+</div>
+<h1 class="font-headline-lg text-headline-lg text-on-surface">Strategy Backtest</h1>
+</div>
+<div class="flex items-center gap-component-gap">
+<button class="flex items-center justify-center gap-2 px-4 py-2 bg-surface-container-highest border border-outline-variant hover:bg-surface-bright rounded text-on-surface font-data-mono text-data-mono transition-colors">
+<span class="material-symbols-outlined text-[18px]">tune</span> Parameters
+                    </button>
+<button class="flex items-center justify-center gap-2 px-4 py-2 bg-primary-container text-on-primary-container hover:bg-primary-fixed rounded font-data-mono text-data-mono font-bold transition-colors">
+<span class="material-symbols-outlined text-[18px]">download</span> Export CSV
+                    </button>
+</div>
+</div>
+<!-- Parameters Module -->
+<div class="bg-surface-container-high border border-outline-variant rounded p-4 flex flex-col md:flex-row items-center gap-4">
+<div class="font-label-caps text-label-caps text-on-surface-variant whitespace-nowrap">DATE RANGE</div>
+<div class="flex items-center gap-2 w-full md:w-auto">
+<div class="relative flex-1 md:w-48">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[16px]">calendar_today</span>
+<input class="w-full bg-surface border border-outline-variant rounded py-1.5 pl-9 pr-3 text-on-surface font-data-mono text-data-mono focus:border-primary-container focus:ring-1 focus:ring-primary-container outline-none" readonly="" type="text" value="01 Jan 2023"/>
+</div>
+<span class="text-on-surface-variant font-data-mono">-</span>
+<div class="relative flex-1 md:w-48">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[16px]">calendar_today</span>
+<input class="w-full bg-surface border border-outline-variant rounded py-1.5 pl-9 pr-3 text-on-surface font-data-mono text-data-mono focus:border-primary-container focus:ring-1 focus:ring-primary-container outline-none" readonly="" type="text" value="24 Oct 2023"/>
+</div>
+</div>
+<div class="h-8 w-[1px] bg-outline-variant hidden md:block mx-2"></div>
+<div class="flex items-center gap-3 w-full md:w-auto">
+<div class="font-label-caps text-label-caps text-on-surface-variant">STRATEGY</div>
+<select class="bg-surface border border-outline-variant rounded py-1.5 px-3 text-on-surface font-data-mono text-data-mono focus:border-primary-container outline-none appearance-none pr-8 relative w-full md:w-auto">
+<option>Mean Reversion (Nifty 50)</option>
+<option>Trend Follower (Bank Nifty)</option>
+</select>
+</div>
+<button class="md:ml-auto px-4 py-1.5 bg-surface-container-highest border border-outline-variant hover:border-primary-container text-primary-container rounded font-data-mono text-data-mono transition-colors w-full md:w-auto">
+                    Run Backtest
+                </button>
+</div>
+<!-- Stats Row -->
+<div class="grid grid-cols-2 md:grid-cols-5 gap-component-gap">
+<div class="bg-surface-container-high border border-outline-variant rounded p-3 flex flex-col justify-center items-center text-center">
+<span class="font-label-caps text-label-caps text-on-surface-variant mb-1">WIN RATE</span>
+<span class="font-data-mono text-headline-md text-primary-container">68.4%</span>
+</div>
+<div class="bg-surface-container-high border border-outline-variant rounded p-3 flex flex-col justify-center items-center text-center">
+<span class="font-label-caps text-label-caps text-on-surface-variant mb-1">TOTAL TRADES</span>
+<span class="font-data-mono text-headline-md text-on-surface">142</span>
+</div>
+<div class="bg-surface-container-high border border-outline-variant rounded p-3 flex flex-col justify-center items-center text-center">
+<span class="font-label-caps text-label-caps text-on-surface-variant mb-1">AVG P&amp;L</span>
+<span class="font-data-mono text-headline-md text-primary-container">+₹ 4,250</span>
+</div>
+<div class="bg-surface-container-high border border-outline-variant rounded p-3 flex flex-col justify-center items-center text-center">
+<span class="font-label-caps text-label-caps text-on-surface-variant mb-1">MAX DRAWDOWN</span>
+<span class="font-data-mono text-headline-md text-error">-8.2%</span>
+</div>
+<div class="bg-surface-container-high border border-outline-variant rounded p-3 flex flex-col justify-center items-center text-center col-span-2 md:col-span-1">
+<span class="font-label-caps text-label-caps text-on-surface-variant mb-1">SHARPE RATIO</span>
+<span class="font-data-mono text-headline-md text-primary-fixed">1.85</span>
+</div>
+</div>
+<!-- Equity Curve -->
+<div class="bg-surface-container-high border border-outline-variant rounded flex flex-col overflow-hidden min-h-[300px]">
+<div class="px-4 py-3 border-b border-outline-variant flex justify-between items-center bg-surface-container-lowest/50">
+<span class="font-label-caps text-label-caps text-on-surface">EQUITY CURVE VS BENCHMARK</span>
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-2">
+<div class="w-3 h-[2px] bg-primary-container"></div>
+<span class="font-data-mono text-[10px] text-on-surface-variant">Strategy</span>
+</div>
+<div class="flex items-center gap-2">
+<div class="w-3 h-[2px] bg-outline-variant"></div>
+<span class="font-data-mono text-[10px] text-on-surface-variant">Nifty B&amp;H</span>
+</div>
+</div>
+</div>
+<div class="flex-1 relative bg-surface p-4 flex items-end">
+<!-- CSS Mock Chart representation -->
+<div class="absolute inset-0 opacity-10" style="background-image: linear-gradient(0deg, transparent 24%, rgba(255, 255, 255, .1) 25%, rgba(255, 255, 255, .1) 26%, transparent 27%, transparent 74%, rgba(255, 255, 255, .1) 75%, rgba(255, 255, 255, .1) 76%, transparent 77%, transparent), linear-gradient(90deg, transparent 24%, rgba(255, 255, 255, .1) 25%, rgba(255, 255, 255, .1) 26%, transparent 27%, transparent 74%, rgba(255, 255, 255, .1) 75%, rgba(255, 255, 255, .1) 76%, transparent 77%, transparent); background-size: 50px 50px;"></div>
+<svg class="absolute inset-0 w-full h-full preserve-3d" preserveaspectratio="none" viewbox="0 0 1000 200">
+<!-- Benchmark Line -->
+<path d="M0,180 L100,175 L200,160 L300,165 L400,150 L500,140 L600,145 L700,130 L800,120 L900,125 L1000,110" fill="none" stroke="#3b4a44" stroke-width="2"></path>
+<!-- Strategy Line -->
+<path d="M0,180 L100,160 L200,130 L300,140 L400,100 L500,80 L600,90 L700,50 L800,30 L900,40 L1000,10" fill="none" stroke="#00d4aa" stroke-width="3"></path>
+<!-- Area Fill -->
+<path d="M0,180 L100,160 L200,130 L300,140 L400,100 L500,80 L600,90 L700,50 L800,30 L900,40 L1000,10 L1000,200 L0,200 Z" fill="url(#grad)" opacity="0.1"></path>
+<defs>
+<lineargradient id="grad" x1="0" x2="0" y1="0" y2="1">
+<stop offset="0%" stop-color="#00d4aa"></stop>
+<stop offset="100%" stop-color="transparent"></stop>
+</lineargradient>
+</defs>
+</svg>
+</div>
+</div>
+<!-- Execution Log -->
+<div class="bg-surface-container-high border border-outline-variant rounded flex flex-col overflow-hidden">
+<div class="px-4 py-3 border-b border-outline-variant bg-surface-container-lowest/50">
+<span class="font-label-caps text-label-caps text-on-surface">EXECUTION LOG</span>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse whitespace-nowrap">
+<thead class="bg-surface-container font-label-caps text-[10px] text-on-surface-variant border-b border-outline-variant uppercase">
+<tr>
+<th class="px-4 py-2 font-semibold">Date / Time</th>
+<th class="px-4 py-2 font-semibold">Symbol</th>
+<th class="px-4 py-2 font-semibold">Type</th>
+<th class="px-4 py-2 font-semibold text-right">Entry</th>
+<th class="px-4 py-2 font-semibold text-right">Exit</th>
+<th class="px-4 py-2 font-semibold text-right">P&amp;L</th>
+</tr>
+</thead>
+<tbody class="font-data-mono text-data-mono text-on-surface">
+<tr class="border-b border-outline-variant/30 bg-[#00d4aa0d] hover:bg-surface-bright transition-colors">
+<td class="px-4 py-2">24 Oct, 10:15:02</td>
+<td class="px-4 py-2 font-bold text-on-surface">BANKNIFTY 47500 CE</td>
+<td class="px-4 py-2"><span class="bg-surface border border-outline-variant px-1.5 py-0.5 rounded text-[10px] text-primary-container">LONG</span></td>
+<td class="px-4 py-2 text-right">₹ 245.50</td>
+<td class="px-4 py-2 text-right">₹ 310.20</td>
+<td class="px-4 py-2 text-right font-bold text-primary-container">+₹ 1,617.50</td>
+</tr>
+<tr class="border-b border-outline-variant/30 bg-[#93000a1a] hover:bg-surface-bright transition-colors">
+<td class="px-4 py-2">23 Oct, 14:30:11</td>
+<td class="px-4 py-2 font-bold text-on-surface">NIFTY 22200 PE</td>
+<td class="px-4 py-2"><span class="bg-surface border border-outline-variant px-1.5 py-0.5 rounded text-[10px] text-error">SHORT</span></td>
+<td class="px-4 py-2 text-right">₹ 112.00</td>
+<td class="px-4 py-2 text-right">₹ 135.50</td>
+<td class="px-4 py-2 text-right font-bold text-error">-₹ 1,175.00</td>
+</tr>
+<tr class="border-b border-outline-variant/30 bg-[#00d4aa0d] hover:bg-surface-bright transition-colors">
+<td class="px-4 py-2">22 Oct, 09:20:45</td>
+<td class="px-4 py-2 font-bold text-on-surface">BANKNIFTY 47000 CE</td>
+<td class="px-4 py-2"><span class="bg-surface border border-outline-variant px-1.5 py-0.5 rounded text-[10px] text-primary-container">LONG</span></td>
+<td class="px-4 py-2 text-right">₹ 320.10</td>
+<td class="px-4 py-2 text-right">₹ 450.00</td>
+<td class="px-4 py-2 text-right font-bold text-primary-container">+₹ 3,247.50</td>
+</tr>
+<tr class="bg-[#00d4aa0d] hover:bg-surface-bright transition-colors">
+<td class="px-4 py-2">20 Oct, 11:05:00</td>
+<td class="px-4 py-2 font-bold text-on-surface">RELIANCE</td>
+<td class="px-4 py-2"><span class="bg-surface border border-outline-variant px-1.5 py-0.5 rounded text-[10px] text-primary-container">LONG</span></td>
+<td class="px-4 py-2 text-right">₹ 2,340.00</td>
+<td class="px-4 py-2 text-right">₹ 2,380.50</td>
+<td class="px-4 py-2 text-right font-bold text-primary-container">+₹ 10,125.00</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar (Mobile) -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center h-16 bg-[#0d1117] md:hidden border-t border-[#1e293b]">
+<a class="flex flex-col items-center justify-center text-slate-500 pt-1 hover:text-slate-300 active:scale-95 transition-transform font-['Inter'] text-[9px] font-bold uppercase w-full h-full" href="#">
+<span class="material-symbols-outlined text-[20px] mb-0.5">home</span>
+    HOME
+</a>
+<a class="flex flex-col items-center justify-center text-slate-500 pt-1 hover:text-slate-300 active:scale-95 transition-transform font-['Inter'] text-[9px] font-bold uppercase w-full h-full" href="#">
+<span class="material-symbols-outlined text-[20px] mb-0.5">insights</span>
+    INTELLIGENCE
+</a>
+<a class="flex flex-col items-center justify-center text-slate-500 pt-1 hover:text-slate-300 active:scale-95 transition-transform font-['Inter'] text-[9px] font-bold uppercase w-full h-full" href="#">
+<span class="material-symbols-outlined text-[20px] mb-0.5">legend_toggle</span>
+    OPTIONS
+</a>
+<a class="flex flex-col items-center justify-center text-slate-500 pt-1 hover:text-slate-300 active:scale-95 transition-transform font-['Inter'] text-[9px] font-bold uppercase w-full h-full" href="#">
+<span class="material-symbols-outlined text-[20px] mb-0.5">filter_alt</span>
+    SCREENER
+</a>
+<a class="flex flex-col items-center justify-center text-[#00d4aa] border-t-2 border-[#00d4aa] pt-1 active:scale-95 transition-transform font-['Inter'] text-[9px] font-bold uppercase w-full h-full bg-surface-container-highest/20" href="#">
+<span class="material-symbols-outlined text-[20px] mb-0.5">history_edu</span>
+    BACKTEST
+</a>
+<a class="flex flex-col items-center justify-center text-slate-500 pt-1 hover:text-slate-300 active:scale-95 transition-transform font-['Inter'] text-[9px] font-bold uppercase w-full h-full" href="#">
+<span class="material-symbols-outlined text-[20px] mb-0.5">precision_manufacturing</span>
+    ALGO
+</a>
+<a class="flex flex-col items-center justify-center text-slate-500 pt-1 hover:text-slate-300 active:scale-95 transition-transform font-['Inter'] text-[9px] font-bold uppercase w-full h-full" href="#">
+<span class="material-symbols-outlined text-[20px] mb-0.5">list_alt</span>
+    WATCHLIST
+</a>
+<a class="flex flex-col items-center justify-center text-slate-500 pt-1 hover:text-slate-300 active:scale-95 transition-transform font-['Inter'] text-[9px] font-bold uppercase w-full h-full" href="#">
+<span class="material-symbols-outlined text-[20px] mb-0.5">notifications</span>
+    ALERTS
+</a>
+</nav>
+</body></html>

@@ -1,0 +1,12 @@
+node_modules/
+__pycache__/
+*.pyc
+.env
+*.zip
+frontend/dist/
+ml-service/venv/
+logs/
+.claude/
+*.pid
+backend/node_modules/
+frontend/node_modules/
