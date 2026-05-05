@@ -24,7 +24,7 @@ echo ""
 # Kill existing processes on ports 3000, 5000, 8000
 echo -e "${YELLOW}→ Stopping any existing FinoLens services...${NC}"
 for PORT in 3000 5000 8000; do
-  PID=$(lsof -ti:$PORT 2>/dev/null)
+  PID=$(lsof -ti:$PORT 2>/dev/null || true)
   if [ ! -z "$PID" ]; then
     kill -9 $PID 2>/dev/null
     echo -e "  Killed process on port $PORT (PID: $PID)"

@@ -2,65 +2,218 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip,
-  ReferenceLine, ComposedChart, Bar
+  ReferenceLine, ComposedChart, Bar,
 } from 'recharts'
 import { getQuote, getCalls, getSignals, getOHLCV, addToWatchlist } from '../api/index.js'
+import {
+  computeEMA, computeBollingerBands, computeVWAP, computeRSI, computeMACD,
+  buildRSIMarkers, buildMACDMarkers, buildBBMarkers,
+  buildVolumeSpikeMarkers, buildEMACrossMarkers, buildSuperTrendMarkers,
+} from '../utils/indicatorEngine.js'
 
 const INTERVALS = ['5M', '15M', '1D', '1W', '1M']
 const INTERVAL_MAP = { '5M': '5m', '15M': '15m', '1D': '1d', '1W': '1wk', '1M': '1mo' }
-
-function computeRSI(closes, period = 14) {
-  if (closes.length < period + 1) return []
-  let avgGain = 0, avgLoss = 0
-  for (let i = 1; i <= period; i++) {
-    const d = closes[i] - closes[i - 1]
-    if (d > 0) avgGain += d; else avgLoss -= d
-  }
-  avgGain /= period; avgLoss /= period
-  const out = new Array(period).fill(null)
-  out.push(avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss))
-  for (let i = period + 1; i < closes.length; i++) {
-    const d = closes[i] - closes[i - 1]
-    avgGain = (avgGain * (period - 1) + Math.max(0, d)) / period
-    avgLoss = (avgLoss * (period - 1) + Math.max(0, -d)) / period
-    out.push(avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss))
-  }
-  return out
-}
-
-function computeEMA(data, period) {
-  const k = 2 / (period + 1)
-  let ema = data[0]
-  return data.map(v => { ema = v * k + ema * (1 - k); return ema })
-}
-
-function computeMACD(closes, fast = 12, slow = 26, signal = 9) {
-  const emaFast = computeEMA(closes, fast)
-  const emaSlow = computeEMA(closes, slow)
-  const macdLine = closes.map((_, i) => emaFast[i] - emaSlow[i])
-  const signalOffset = slow - 1
-  const sigLine = computeEMA(macdLine.slice(signalOffset), signal)
-  const hist = sigLine.map((v, i) => macdLine[i + signalOffset] - v)
-  return { macdLine, sigLine, hist, offset: signalOffset }
-}
+const OVERLAYS = [
+  { key: 'rsi',  label: 'RSI zones' },
+  { key: 'macd', label: 'MACD cross' },
+  { key: 'bb',   label: 'BB touch' },
+  { key: 'vol',  label: 'Vol spike' },
+  { key: 'ema',  label: 'EMA cross' },
+  { key: 'st',   label: 'SuperTrend' },
+]
 
 function Skeleton({ className = '' }) {
   return <div className={`animate-pulse bg-[#1f2a3c] rounded ${className}`} />
 }
 
+function ScoreBar({ label, score }) {
+  const color = score >= 60 ? '#00d4aa' : score >= 40 ? '#ffa858' : '#ffb4ab'
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex justify-between items-center text-xs">
+        <span className="text-[#c0c6db]">{label}</span>
+        <span className="font-mono" style={{ color }}>{Math.round(score)}/100</span>
+      </div>
+      <div className="w-full bg-[#2a3548] rounded-full h-1.5">
+        <div className="h-1.5 rounded-full transition-all"
+          style={{ width: `${Math.min(100, Math.max(0, score))}%`, background: color }} />
+      </div>
+    </div>
+  )
+}
+
+function LevelRow({ label, value, color, bold, dimmed }) {
+  if (!value) return null
+  return (
+    <div className={`flex justify-between items-center py-1 border-b border-[#1e293b]/60 ${dimmed ? 'opacity-50' : ''}`}>
+      <span className={`text-[10px] font-bold uppercase ${bold ? '' : 'text-[#bacac2]'}`}
+        style={bold ? { color } : {}}>
+        {label}
+      </span>
+      <span className="font-mono text-xs" style={{ color: color || '#d8e3fb' }}>
+        ₹{value.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+      </span>
+    </div>
+  )
+}
+
+// SuperTrend line split into green/red segments for chart overlay
+function computeSuperTrendLines(candles, period = 10, mult = 3) {
+  if (candles.length < period + 5) return { greenValues: [], redValues: [] }
+  const n = candles.length
+  const atr = new Array(n).fill(0)
+  for (let i = 1; i < n; i++) {
+    const tr = Math.max(
+      candles[i].high - candles[i].low,
+      Math.abs(candles[i].high - candles[i - 1].close),
+      Math.abs(candles[i].low  - candles[i - 1].close)
+    )
+    atr[i] = i < period ? tr : (atr[i - 1] * (period - 1) + tr) / period
+  }
+  const upper = new Array(n).fill(0)
+  const lower = new Array(n).fill(0)
+  const st    = new Array(n).fill(0)
+  for (let i = 1; i < n; i++) {
+    const hl2 = (candles[i].high + candles[i].low) / 2
+    const bu = hl2 + mult * atr[i]
+    const bl = hl2 - mult * atr[i]
+    upper[i] = (bu < upper[i - 1] || candles[i - 1].close > upper[i - 1]) ? bu : upper[i - 1]
+    lower[i] = (bl > lower[i - 1] || candles[i - 1].close < lower[i - 1]) ? bl : lower[i - 1]
+    if (st[i - 1] === upper[i - 1]) {
+      st[i] = candles[i].close > upper[i] ? lower[i] : upper[i]
+    } else {
+      st[i] = candles[i].close < lower[i] ? upper[i] : lower[i]
+    }
+  }
+  return {
+    greenValues: st.map((v, i) => (candles[i].close > v ? v : null)),
+    redValues:   st.map((v, i) => (candles[i].close <= v ? v : null)),
+  }
+}
+
+// ─── Main candlestick chart with overlays ────────────────────────────────────
+function MainChart({ ohlcv, interval, emaPeriod, showBB, showVWAP, showST, overlays }) {
+  const containerRef = useRef(null)
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container || !ohlcv.length) return
+
+    const isIntraday = interval === '5M' || interval === '15M'
+    const candles = ohlcv
+      .filter(r => r.open && r.close)
+      .map(r => ({
+        time: isIntraday
+          ? Math.floor(new Date(r.timestamp.replace(' ', 'T')).getTime() / 1000)
+          : r.timestamp.split(' ')[0],
+        open: r.open, high: r.high, low: r.low, close: r.close, volume: r.volume ?? 0,
+      }))
+    if (!candles.length) return
+
+    const times  = candles.map(c => c.time)
+    const closes = candles.map(c => c.close)
+    const vols   = candles.map(c => c.volume)
+
+    let chart = null, ro = null, active = true
+
+    import('lightweight-charts').then(({ createChart }) => {
+      if (!active || !containerRef.current) return
+      container.innerHTML = ''
+
+      chart = createChart(container, {
+        width:  container.clientWidth  || 700,
+        height: container.clientHeight || 480,
+        layout:          { background: { color: '#0d1829' }, textColor: '#bacac2' },
+        grid:            { vertLines: { color: '#1a2540' }, horzLines: { color: '#1a2540' } },
+        timeScale:       { borderColor: '#2a3548', timeVisible: true },
+        rightPriceScale: { borderColor: '#2a3548' },
+        crosshair:       { mode: 1 },
+      })
+
+      const series = chart.addCandlestickSeries({
+        upColor: '#00d4aa', downColor: '#ffb4ab',
+        borderUpColor: '#00d4aa', borderDownColor: '#ffb4ab',
+        wickUpColor: '#00d4aa', wickDownColor: '#ffb4ab',
+      })
+      series.setData(candles)
+
+      const addLine = (values, color, dashed = false, width = 1.5) => {
+        const s = chart.addLineSeries({
+          color, lineWidth: width, lineStyle: dashed ? 2 : 0,
+          priceLineVisible: false, lastValueVisible: false,
+        })
+        s.setData(values.map((v, i) => v != null ? { time: times[i], value: v } : null).filter(Boolean))
+      }
+
+      if (emaPeriod > 0)  addLine(computeEMA(closes, emaPeriod), '#ffa858')
+      if (showVWAP)        addLine(computeVWAP(candles), '#ff6b9d')
+      if (showBB) {
+        const { upper, middle, lower } = computeBollingerBands(closes, 20, 2)
+        addLine(upper, '#5588cc', true)
+        addLine(middle, '#5588cc', false, 1)
+        addLine(lower, '#5588cc', true)
+      }
+      if (showST) {
+        const { greenValues, redValues } = computeSuperTrendLines(candles)
+        addLine(greenValues, '#00d4aa', false, 2)
+        addLine(redValues,   '#ffb4ab', false, 2)
+      }
+
+      // Signal markers — clean arrows, no text labels
+      const markers = []
+      if (overlays.rsi)  markers.push(...buildRSIMarkers(times, closes, 14, false))
+      if (overlays.macd) markers.push(...buildMACDMarkers(times, closes, false))
+      if (overlays.bb)   markers.push(...buildBBMarkers(times, closes, 20, false))
+      if (overlays.vol)  markers.push(...buildVolumeSpikeMarkers(times, vols, false))
+      if (overlays.ema)  markers.push(...buildEMACrossMarkers(times, closes, 9, 21, false))
+      if (overlays.st)   markers.push(...buildSuperTrendMarkers(candles, false))
+      markers.sort((a, b) => (a.time < b.time ? -1 : 1))
+      if (markers.length) series.setMarkers(markers)
+
+      chart.timeScale().fitContent()
+
+      ro = new ResizeObserver(() => {
+        if (chart && containerRef.current) {
+          chart.applyOptions({
+            width:  containerRef.current.clientWidth  || 700,
+            height: containerRef.current.clientHeight || 480,
+          })
+        }
+      })
+      ro.observe(container)
+    })
+
+    return () => {
+      active = false
+      if (ro)    ro.disconnect()
+      if (chart) chart.remove()
+    }
+  }, [ohlcv, interval, emaPeriod, showBB, showVWAP, showST, overlays])
+
+  return <div ref={containerRef} style={{ position: 'absolute', inset: 0 }} />
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
 export default function Intelligence() {
   const { symbol = 'RELIANCE' } = useParams()
   const navigate = useNavigate()
   const [activeInterval, setActiveInterval] = useState('1D')
-  const chartRef = useRef(null)
 
-  const [quote, setQuote]       = useState(null)
+  const [quote,    setQuote]    = useState(null)
   const [callData, setCallData] = useState(null)
-  const [signals, setSignals]   = useState(null)
-  const [ohlcv, setOhlcv]       = useState([])
-  const [loading, setLoading]   = useState(true)
-  const [error, setError]       = useState(null)
+  const [signals,  setSignals]  = useState(null)
+  const [ohlcv,    setOhlcv]    = useState([])
+  const [loading,  setLoading]  = useState(true)
+  const [error,    setError]    = useState(null)
   const [watchToast, setWatchToast] = useState('')
+
+  const [emaPeriod, setEmaPeriod] = useState(21)
+  const [showBB,    setShowBB]    = useState(false)
+  const [showVWAP,  setShowVWAP]  = useState(true)
+  const [showST,    setShowST]    = useState(true)
+  const [overlays,  setOverlays]  = useState({ rsi: true, macd: true, bb: false, vol: true, ema: false, st: true })
+
+  const toggleOverlay = key => setOverlays(p => ({ ...p, [key]: !p[key] }))
 
   const load = useCallback(async () => {
     setLoading(true); setError(null)
@@ -75,8 +228,7 @@ export default function Intelligence() {
       setCallData(cRes?.data ?? null)
       setSignals(sRes?.data ?? null)
       setOhlcv(Array.isArray(oRes?.data) ? oRes.data : [])
-    } catch (e) {
-      console.error('Intelligence fetch error', e)
+    } catch {
       setError('Failed to load data for ' + symbol)
     } finally {
       setLoading(false)
@@ -85,117 +237,76 @@ export default function Intelligence() {
 
   useEffect(() => { load() }, [load])
 
-  // TradingView lightweight-chart
-  useEffect(() => {
-    const container = chartRef.current
-    if (!container || ohlcv.length === 0) return
-    let chart, series
-    import('lightweight-charts').then(({ createChart }) => {
-      container.innerHTML = ''
-      chart = createChart(container, {
-        width: container.clientWidth,
-        height: container.clientHeight,
-        layout: { background: { color: '#111c2d' }, textColor: '#bacac2' },
-        grid: { vertLines: { color: '#1f2a3c' }, horzLines: { color: '#1f2a3c' } },
-        timeScale: { borderColor: '#3b4a44' },
-        rightPriceScale: { borderColor: '#3b4a44' },
-      })
-      series = chart.addCandlestickSeries({
-        upColor: '#00d4aa', downColor: '#ffb4ab',
-        borderUpColor: '#00d4aa', borderDownColor: '#ffb4ab',
-        wickUpColor: '#00d4aa', wickDownColor: '#ffb4ab',
-      })
-      const isIntraday = activeInterval === '5M' || activeInterval === '15M'
-      const candles = ohlcv
-        .filter(r => r.open && r.high && r.low && r.close)
-        .map(r => ({
-          time: isIntraday
-            ? Math.floor(new Date(r.timestamp).getTime() / 1000)
-            : r.timestamp.split(' ')[0],
-          open: r.open, high: r.high, low: r.low, close: r.close,
-        }))
-      if (candles.length > 0) series.setData(candles)
-      const ro = new ResizeObserver(() => chart.applyOptions({ width: container.clientWidth }))
-      ro.observe(container)
-      return () => { ro.disconnect(); chart.remove() }
-    })
-    return () => { if (chart) chart.remove() }
-  }, [ohlcv, activeInterval])
-
-  // RSI + MACD chart data derived from OHLCV
-  const closes = ohlcv.map(r => r.close).filter(Boolean)
+  // Derived data for sub-panels
+  const closes  = ohlcv.map(r => r.close).filter(Boolean)
   const labels  = ohlcv.map(r => r.timestamp?.split(' ')[0] ?? '').slice(-30)
   const rsiVals = computeRSI(closes)
   const rsiData = rsiVals.slice(-30).map((v, i) => ({ t: labels[i] ?? i, v: v != null ? +v.toFixed(2) : null }))
+  const lastRSI = rsiVals.filter(v => v != null).at(-1) ?? null
 
-  const { macdLine, sigLine, hist, offset } = closes.length > 30
+  const { macdLine, signalLine, hist, offset } = closes.length > 30
     ? computeMACD(closes)
-    : { macdLine: [], sigLine: [], hist: [], offset: 0 }
+    : { macdLine: [], signalLine: [], hist: [], offset: 0 }
   const macdLabels = ohlcv.slice(offset).map(r => r.timestamp?.split(' ')[0] ?? '').slice(-30)
   const macdData = hist.slice(-30).map((h, i) => ({
     t: macdLabels[i] ?? i,
-    macd: +(macdLine[i + macdLine.length - hist.length + (hist.length - Math.min(30, hist.length))] ?? 0).toFixed(3),
-    signal: +(sigLine[Math.max(0, sigLine.length - Math.min(30, hist.length)) + i] ?? 0).toFixed(3),
-    hist: +h.toFixed(3),
+    macd:   +(macdLine[macdLine.length - hist.length + (hist.length - Math.min(30, hist.length)) + i] ?? 0).toFixed(3),
+    signal: +(signalLine[Math.max(0, signalLine.length - Math.min(30, hist.length)) + i] ?? 0).toFixed(3),
+    hist:   +h.toFixed(3),
   }))
+  const lastMACD = hist.filter(v => v != null).at(-1) ?? null
 
   const handleAddWatchlist = async () => {
     try {
       await addToWatchlist(symbol)
-      setWatchToast('Added to watchlist!')
+      setWatchToast('Added!')
       setTimeout(() => setWatchToast(''), 2500)
-    } catch (e) {
+    } catch {
       setWatchToast('Already in watchlist')
       setTimeout(() => setWatchToast(''), 2500)
     }
   }
 
-  const ltp        = quote?.ltp ?? callData?.current_price ?? 0
-  const change     = quote?.change ?? 0
-  const changePct  = quote?.change_pct ?? 0
-  const stockName  = callData?.name ?? quote?.name ?? symbol
-  const call       = callData?.call ?? '—'
-  const confidence = callData?.confidence ?? 0
-  const entry      = callData?.entry ?? ltp
-  const sl         = callData?.stop_loss ?? 0
-  const target     = callData?.target ?? 0
+  const ltp       = quote?.ltp ?? callData?.current_price ?? 0
+  const change    = quote?.change ?? 0
+  const changePct = quote?.change_pct ?? 0
+  const call      = callData?.call ?? '—'
+  const conf      = callData?.confidence ?? 0
+  const entry     = callData?.entry ?? ltp
+  const sl        = callData?.stop_loss ?? 0
+  const target    = callData?.target ?? 0
+  const callColor = (call === 'BUY' || call === 'STRONG BUY') ? '#00d4aa'
+                  : (call === 'SELL' || call === 'STRONG SELL') ? '#ffb4ab' : '#ffa858'
 
-  const callColor = call === 'BUY' ? '#00d4aa' : call === 'SELL' ? '#ffb4ab' : '#ffa858'
-
+  const s = signals ?? {}
+  const cmp = ltp || s.current_price || 0
   const scoreItems = [
-    { label: 'Technical Score', score: signals?.technical_score ?? 0 },
-    { label: 'RSI Zone', score: signals?.rsi != null ? Math.round(100 - Math.abs(signals.rsi - 50) * 2) : 50 },
-    { label: 'MACD Momentum', score: signals?.macd_hist != null ? Math.min(100, Math.max(0, 50 + signals.macd_hist * 2)) : 50 },
-    { label: 'Volume Strength', score: signals?.volume_ratio != null ? Math.min(100, Math.round(signals.volume_ratio * 40)) : 40 },
-    { label: 'BB Position', score: signals?.bb_position != null ? Math.round(100 - Math.abs(signals.bb_position - 50) * 1.5) : 50 },
-  ]
-
-  const keyLevels = [
-    { label: 'Resistance', value: signals?.resistance ?? 0, dotColor: '#ffb4ab' },
-    { label: 'CMP', value: ltp, dotColor: '#00d4aa', bold: true, highlight: true },
-    { label: 'VWAP', value: signals?.vwap ?? 0, dotColor: '#ffa858' },
-    { label: 'Support', value: signals?.support ?? 0, dotColor: '#46f1c5' },
+    { label: 'Technical Score', score: s.technical_score ?? 0 },
+    { label: 'RSI Zone',        score: s.rsi != null ? Math.round(100 - Math.abs(s.rsi - 50) * 2) : 50 },
+    { label: 'MACD Momentum',   score: s.macd_hist != null ? Math.min(100, Math.max(0, 50 + s.macd_hist * 20)) : 50 },
+    { label: 'Volume Strength', score: s.volume_ratio != null ? Math.min(100, Math.round(s.volume_ratio * 40)) : 40 },
+    { label: 'BB Position',     score: s.bb_position != null ? Math.round(100 - Math.abs(s.bb_position - 50) * 1.5) : 50 },
   ]
 
   return (
     <main className="w-full">
       {/* Header */}
-      <div className="px-4 py-4 md:px-6 bg-[#081425] border-b border-[#1e293b] flex flex-col md:flex-row md:items-end justify-between gap-4">
+      <div className="px-4 py-3 md:px-6 bg-[#081425] border-b border-[#1e293b] flex flex-col md:flex-row md:items-end justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-0.5">
             {loading ? <Skeleton className="w-32 h-7" /> : (
               <>
-                <h1 className="text-2xl font-semibold text-[#d8e3fb]">{symbol}</h1>
-                <span className="text-sm text-[#c0c6db]">{stockName}</span>
+                <h1 className="text-xl font-semibold text-[#d8e3fb]">{symbol}</h1>
+                <span className="text-sm text-[#c0c6db]">{callData?.name ?? quote?.name ?? ''}</span>
               </>
             )}
           </div>
           {loading ? <Skeleton className="w-48 h-9 mt-1" /> : (
             <div className="flex items-end gap-3">
-              <span className="text-[32px] font-bold text-[#d8e3fb] leading-none">
+              <span className="text-[28px] font-bold text-[#d8e3fb] leading-none">
                 ₹{ltp.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
               </span>
-              <span className={`font-mono text-sm flex items-center mb-1 ${change >= 0 ? 'text-[#00d4aa]' : 'text-[#ffb4ab]'}`}>
+              <span className={`font-mono text-sm flex items-center mb-0.5 ${change >= 0 ? 'text-[#00d4aa]' : 'text-[#ffb4ab]'}`}>
                 <span className="material-symbols-outlined text-sm">{change >= 0 ? 'arrow_upward' : 'arrow_downward'}</span>
                 {Math.abs(change).toFixed(2)} ({changePct >= 0 ? '+' : ''}{changePct.toFixed(2)}%)
               </span>
@@ -204,75 +315,122 @@ export default function Intelligence() {
         </div>
         <div className="flex gap-2 flex-wrap">
           <div className="relative">
-            <button
-              onClick={handleAddWatchlist}
-              className="bg-[#1f2a3c] border border-[#3b4a44] hover:bg-[#2f3a4c] text-[#d8e3fb] px-4 py-2 rounded text-[11px] font-bold uppercase tracking-wide transition-colors"
-            >
-              ADD TO WATCHLIST
+            <button onClick={handleAddWatchlist}
+              className="bg-[#1f2a3c] border border-[#3b4a44] hover:bg-[#2f3a4c] text-[#d8e3fb] px-3 py-1.5 rounded text-[11px] font-bold uppercase tracking-wide transition-colors">
+              + WATCHLIST
             </button>
-            {watchToast && (
-              <div className="absolute -bottom-7 left-0 text-[10px] text-[#00d4aa] whitespace-nowrap">{watchToast}</div>
-            )}
+            {watchToast && <div className="absolute -bottom-5 left-0 text-[10px] text-[#00d4aa] whitespace-nowrap">{watchToast}</div>}
           </div>
-          <button
-            onClick={() => navigate('/algo')}
-            className="bg-[#1f2a3c] border border-[#3b4a44] hover:bg-[#2f3a4c] text-[#d8e3fb] px-4 py-2 rounded text-[11px] font-bold uppercase tracking-wide transition-colors"
-          >
-            CREATE ALGO STRATEGY
+          <button onClick={() => navigate('/algo')}
+            className="bg-[#1f2a3c] border border-[#3b4a44] hover:bg-[#2f3a4c] text-[#d8e3fb] px-3 py-1.5 rounded text-[11px] font-bold uppercase tracking-wide transition-colors">
+            ALGO STRATEGY
           </button>
-          <button className="bg-[#00d4aa] hover:bg-[#46f1c5] text-[#005643] px-6 py-2 rounded text-[11px] font-bold uppercase tracking-wide transition-colors">
-            TRADE
+          <button onClick={() => navigate('/charts')}
+            className="bg-[#00d4aa] hover:bg-[#46f1c5] text-[#005643] px-4 py-1.5 rounded text-[11px] font-bold uppercase tracking-wide transition-colors">
+            MANUAL CHART
           </button>
         </div>
       </div>
 
       {error && (
-        <div className="mx-4 mt-4 p-3 bg-[#ffb4ab]/10 border border-[#ffb4ab]/30 rounded text-[#ffb4ab] text-sm flex items-center justify-between">
+        <div className="mx-4 mt-3 p-3 bg-[#ffb4ab]/10 border border-[#ffb4ab]/30 rounded text-[#ffb4ab] text-sm flex items-center justify-between">
           <span>{error}</span>
           <button onClick={load} className="text-xs underline">Retry</button>
         </div>
       )}
 
-      <div className="p-4 md:p-6 grid grid-cols-1 xl:grid-cols-12 gap-4">
-        {/* Charts */}
-        <div className="xl:col-span-8 flex flex-col gap-2">
+      <div className="p-4 md:p-5 grid grid-cols-1 xl:grid-cols-12 gap-4">
+
+        {/* ── LEFT: chart column ── */}
+        <div className="xl:col-span-8 flex flex-col gap-3">
+
+          {/* Main chart card */}
           <div className="bg-[#111c2d] border border-[#3b4a44] rounded flex flex-col">
-            <div className="flex items-center justify-between p-2 border-b border-[#3b4a44] bg-[#2a3548]">
+            {/* Timeframe row */}
+            <div className="flex items-center justify-between p-2 border-b border-[#3b4a44] bg-[#0d1117] flex-wrap gap-2">
               <div className="flex gap-1">
                 {INTERVALS.map(iv => (
-                  <button
-                    key={iv}
-                    onClick={() => setActiveInterval(iv)}
-                    className={`px-3 py-1 rounded font-mono text-sm transition-colors ${activeInterval === iv ? 'bg-[#2f3a4c] text-[#00d4aa] border border-[#3b4a44]' : 'text-[#c0c6db] hover:text-[#d8e3fb] hover:bg-[#2f3a4c]'}`}
-                  >
+                  <button key={iv} onClick={() => setActiveInterval(iv)}
+                    className={`px-2.5 py-1 rounded font-mono text-xs transition-colors ${activeInterval === iv
+                      ? 'bg-[#2a3548] text-[#00d4aa] border border-[#3b4a44]'
+                      : 'text-[#bacac2] hover:text-[#d8e3fb] hover:bg-[#1a2540]'}`}>
                     {iv}
                   </button>
                 ))}
               </div>
+              {/* Overlay indicator pills */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button onClick={() => setShowST(v => !v)}
+                  className={`px-2 py-0.5 rounded text-[9px] font-bold border transition-colors ${showST
+                    ? 'border-[#00d4aa]/60 bg-[#00d4aa]/10 text-[#00d4aa]' : 'border-[#2a3548] text-[#4a5568]'}`}>
+                  ST(10,3)
+                </button>
+                <button onClick={() => setShowVWAP(v => !v)}
+                  className={`px-2 py-0.5 rounded text-[9px] font-bold border transition-colors ${showVWAP
+                    ? 'border-[#ff6b9d]/60 bg-[#ff6b9d]/10 text-[#ff6b9d]' : 'border-[#2a3548] text-[#4a5568]'}`}>
+                  VWAP
+                </button>
+                <button onClick={() => setShowBB(v => !v)}
+                  className={`px-2 py-0.5 rounded text-[9px] font-bold border transition-colors ${showBB
+                    ? 'border-[#5588cc]/60 bg-[#5588cc]/10 text-[#5588cc]' : 'border-[#2a3548] text-[#4a5568]'}`}>
+                  BB(20)
+                </button>
+                <div className="flex items-center gap-1 border border-[#ffa858]/40 bg-[#ffa858]/8 rounded px-1.5 py-0.5">
+                  <span className="text-[9px] text-[#ffa858] font-bold">EMA</span>
+                  <input type="number" min="5" max="200" value={emaPeriod}
+                    onChange={e => setEmaPeriod(Math.max(5, Math.min(200, +e.target.value)))}
+                    className="w-8 bg-transparent text-[#ffa858] font-mono text-[9px] outline-none text-right" />
+                </div>
+              </div>
             </div>
-            {loading ? (
-              <Skeleton className="w-full h-[340px]" />
-            ) : (
-              <div ref={chartRef} className="w-full h-[340px]" />
-            )}
+
+            {/* Signal overlay toggles */}
+            <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-[#3b4a44] bg-[#080f1e] flex-wrap">
+              <span className="text-[9px] text-[#bacac2] uppercase font-bold mr-1">Signals on chart:</span>
+              {OVERLAYS.map(ov => (
+                <button key={ov.key} onClick={() => toggleOverlay(ov.key)}
+                  className={`px-2 py-0.5 rounded text-[9px] font-bold border transition-colors ${
+                    overlays[ov.key]
+                      ? 'bg-[#00d4aa]/10 border-[#00d4aa]/40 text-[#00d4aa]'
+                      : 'border-[#2a3548] text-[#4a5568]'
+                  }`}>
+                  {ov.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Chart */}
+            <div className="relative" style={{ height: '480px' }}>
+              {loading
+                ? <Skeleton className="absolute inset-0 m-2" />
+                : <MainChart ohlcv={ohlcv} interval={activeInterval}
+                    emaPeriod={emaPeriod} showBB={showBB} showVWAP={showVWAP}
+                    showST={showST} overlays={overlays} />
+              }
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            {/* RSI subchart */}
-            <div className="bg-[#111c2d] border border-[#3b4a44] rounded h-48 p-3 flex flex-col">
+          {/* RSI + MACD sub-panels */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="bg-[#111c2d] border border-[#3b4a44] rounded p-3 flex flex-col" style={{ height: 160 }}>
               <div className="flex justify-between items-center mb-2">
                 <span className="text-[10px] font-bold uppercase text-[#d8e3fb]">RSI (14)</span>
-                <span className="text-[#00d4aa] font-mono text-xs">{signals?.rsi?.toFixed(2) ?? '—'}</span>
+                <span className={`font-mono text-xs font-bold ${
+                  lastRSI != null ? (lastRSI > 70 ? 'text-[#ffb4ab]' : lastRSI < 30 ? 'text-[#00d4aa]' : 'text-[#d8e3fb]') : 'text-[#bacac2]'
+                }`}>
+                  {lastRSI != null ? lastRSI.toFixed(1) : (s.rsi?.toFixed(1) ?? '—')}
+                </span>
               </div>
-              <div className="flex-grow">
+              <div className="flex-1">
                 {loading ? <Skeleton className="h-full" /> : (
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={rsiData}>
                       <XAxis dataKey="t" tick={{ fill: '#bacac2', fontSize: 8 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-                      <YAxis domain={[0, 100]} tick={{ fill: '#bacac2', fontSize: 9 }} axisLine={false} tickLine={false} width={25} />
-                      <ReferenceLine y={70} stroke="#ffb4ab" strokeDasharray="3 3" />
-                      <ReferenceLine y={30} stroke="#00d4aa" strokeDasharray="3 3" />
-                      <Tooltip contentStyle={{ background: '#1f2a3c', border: '1px solid #3b4a44', color: '#d8e3fb', fontSize: 11 }} formatter={v => [v?.toFixed(2), 'RSI']} />
+                      <YAxis domain={[0, 100]} tick={{ fill: '#bacac2', fontSize: 9 }} axisLine={false} tickLine={false} width={22} />
+                      <ReferenceLine y={70} stroke="#ffb4ab" strokeDasharray="3 3" strokeOpacity={0.6} />
+                      <ReferenceLine y={30} stroke="#00d4aa" strokeDasharray="3 3" strokeOpacity={0.6} />
+                      <Tooltip contentStyle={{ background: '#1f2a3c', border: '1px solid #3b4a44', color: '#d8e3fb', fontSize: 11 }}
+                        formatter={v => [v?.toFixed(2), 'RSI']} />
                       <Line type="monotone" dataKey="v" stroke="#00d4aa" dot={false} strokeWidth={1.5} connectNulls />
                     </LineChart>
                   </ResponsiveContainer>
@@ -280,13 +438,16 @@ export default function Intelligence() {
               </div>
             </div>
 
-            {/* MACD subchart */}
-            <div className="bg-[#111c2d] border border-[#3b4a44] rounded h-48 p-3 flex flex-col">
+            <div className="bg-[#111c2d] border border-[#3b4a44] rounded p-3 flex flex-col" style={{ height: 160 }}>
               <div className="flex justify-between items-center mb-2">
                 <span className="text-[10px] font-bold uppercase text-[#d8e3fb]">MACD (12,26,9)</span>
-                <span className="text-[#00d4aa] font-mono text-xs">{signals?.macd_hist?.toFixed(3) ?? '—'}</span>
+                <span className={`font-mono text-xs font-bold ${
+                  lastMACD != null ? (lastMACD > 0 ? 'text-[#00d4aa]' : 'text-[#ffb4ab]') : 'text-[#bacac2]'
+                }`}>
+                  {lastMACD != null ? lastMACD.toFixed(3) : (s.macd_hist?.toFixed(3) ?? '—')}
+                </span>
               </div>
-              <div className="flex-grow">
+              <div className="flex-1">
                 {loading ? <Skeleton className="h-full" /> : (
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={macdData}>
@@ -295,7 +456,7 @@ export default function Intelligence() {
                       <ReferenceLine y={0} stroke="#3b4a44" />
                       <Tooltip contentStyle={{ background: '#1f2a3c', border: '1px solid #3b4a44', color: '#d8e3fb', fontSize: 11 }} />
                       <Bar dataKey="hist" fill="#00d4aa" opacity={0.5} />
-                      <Line type="monotone" dataKey="macd" stroke="#00d4aa" dot={false} strokeWidth={1.5} />
+                      <Line type="monotone" dataKey="macd"   stroke="#00d4aa" dot={false} strokeWidth={1.5} />
                       <Line type="monotone" dataKey="signal" stroke="#c0c6db" dot={false} strokeWidth={1} />
                     </ComposedChart>
                   </ResponsiveContainer>
@@ -305,32 +466,28 @@ export default function Intelligence() {
           </div>
         </div>
 
-        {/* Right panels */}
-        <div className="xl:col-span-4 flex flex-col gap-2">
-          {/* Signal */}
-          <div className="bg-[#111c2d] border border-[#3b4a44] rounded p-4 flex flex-col items-center justify-center text-center">
-            <span className="text-[#c0c6db] text-[11px] font-bold uppercase tracking-wide mb-2">Algorithmic Signal</span>
-            {loading ? <Skeleton className="w-32 h-8 mb-2" /> : (
+        {/* ── RIGHT: signal panel ── */}
+        <div className="xl:col-span-4 flex flex-col gap-3">
+
+          {/* Algorithmic Signal */}
+          <div className="bg-[#111c2d] border border-[#3b4a44] rounded p-4 flex flex-col items-center text-center">
+            <span className="text-[9px] font-bold uppercase tracking-widest text-[#bacac2] mb-2">Algorithmic Signal</span>
+            {loading ? <Skeleton className="w-28 h-8 mb-2" /> : (
               <>
                 <span className="text-2xl font-bold mb-1" style={{ color: callColor }}>{call}</span>
-                <div className="flex items-center gap-1">
-                  <span className="font-mono text-xs text-[#d8e3fb]">{confidence}% Confidence</span>
-                  {call !== '—' && <span className="material-symbols-outlined text-[14px]" style={{ color: callColor }}>trending_up</span>}
-                </div>
-                {call !== 'NEUTRAL' && call !== '—' && (
-                  <div className="mt-3 grid grid-cols-3 gap-2 w-full text-left">
-                    <div className="bg-[#2a3548] p-2 rounded">
-                      <div className="text-[9px] uppercase text-[#bacac2]">Entry</div>
-                      <div className="font-mono text-xs text-[#d8e3fb]">₹{entry.toLocaleString('en-IN')}</div>
-                    </div>
-                    <div className="bg-[#2a3548] p-2 rounded">
-                      <div className="text-[9px] uppercase text-[#bacac2]">Target</div>
-                      <div className="font-mono text-xs text-[#00d4aa]">₹{target.toLocaleString('en-IN')}</div>
-                    </div>
-                    <div className="bg-[#2a3548] p-2 rounded">
-                      <div className="text-[9px] uppercase text-[#bacac2]">SL</div>
-                      <div className="font-mono text-xs text-[#ffb4ab]">₹{sl.toLocaleString('en-IN')}</div>
-                    </div>
+                <div className="text-xs text-[#d8e3fb] font-mono mb-3">{conf}% Confidence</div>
+                {call !== '—' && (
+                  <div className="grid grid-cols-3 gap-2 w-full text-left">
+                    {[
+                      { l: 'Entry',  v: entry,  c: '#d8e3fb' },
+                      { l: 'Target', v: target, c: '#00d4aa' },
+                      { l: 'SL',     v: sl,     c: '#ffb4ab' },
+                    ].map(({ l, v, c }) => (
+                      <div key={l} className="bg-[#2a3548] p-2 rounded">
+                        <div className="text-[9px] uppercase text-[#bacac2]">{l}</div>
+                        <div className="font-mono text-xs" style={{ color: c }}>₹{(v || 0).toLocaleString('en-IN')}</div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </>
@@ -339,64 +496,92 @@ export default function Intelligence() {
 
           {/* Score breakdown */}
           <div className="bg-[#111c2d] border border-[#3b4a44] rounded p-4">
-            <h3 className="text-[#d8e3fb] text-[11px] font-bold uppercase border-b border-[#3b4a44] pb-2 mb-3">Signal Score Breakdown</h3>
+            <h3 className="text-[10px] font-bold uppercase tracking-widest text-[#d8e3fb] border-b border-[#3b4a44] pb-2 mb-3">
+              Signal Score Breakdown
+            </h3>
             <div className="flex flex-col gap-3">
-              {loading ? (
-                [...Array(5)].map((_, i) => <Skeleton key={i} className="h-6" />)
-              ) : (
-                scoreItems.map(s => (
-                  <div key={s.label} className="flex flex-col gap-1">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-[#c0c6db]">{s.label}</span>
-                      <span className="text-[#00d4aa] font-mono">{Math.round(s.score)}/100</span>
-                    </div>
-                    <div className="w-full bg-[#2a3548] rounded-full h-1.5">
-                      <div
-                        className="h-1.5 rounded-full transition-all"
-                        style={{ width: `${Math.min(100, Math.max(0, s.score))}%`, background: s.score >= 60 ? '#00d4aa' : s.score >= 40 ? '#ffa858' : '#ffb4ab' }}
-                      />
-                    </div>
-                  </div>
-                ))
-              )}
+              {loading
+                ? [...Array(5)].map((_, i) => <Skeleton key={i} className="h-5" />)
+                : scoreItems.map(item => <ScoreBar key={item.label} label={item.label} score={item.score} />)
+              }
             </div>
           </div>
 
-          {/* Key levels */}
+          {/* Key Levels: Pivot */}
           <div className="bg-[#111c2d] border border-[#3b4a44] rounded p-4">
-            <h3 className="text-[#d8e3fb] text-[11px] font-bold uppercase border-b border-[#3b4a44] pb-2 mb-4">Key Levels</h3>
-            {loading ? <Skeleton className="h-32" /> : (
-              <div className="flex flex-col gap-3 relative">
-                <div className="absolute left-2.5 top-2 bottom-2 w-px bg-[#3b4a44]/50 z-0" />
-                {keyLevels.filter(l => l.value > 0).map(level => (
-                  <div
-                    key={level.label}
-                    className={`flex items-center gap-4 z-10 relative ${level.highlight ? 'bg-[#2f3a4c]/50 p-2 -mx-2 rounded border border-[#3b4a44]/30' : ''}`}
-                  >
-                    <div className="w-5 h-5 rounded-full bg-[#1f2a3c] border-2 flex items-center justify-center shrink-0" style={{ borderColor: level.dotColor }}>
-                      <div className="w-1.5 h-1.5 rounded-full" style={{ background: level.dotColor }} />
-                    </div>
-                    <div className="flex-grow flex justify-between items-center">
-                      <span className={`text-xs ${level.bold ? 'font-bold' : 'text-[#c0c6db]'}`} style={level.bold ? { color: level.dotColor } : {}}>{level.label}</span>
-                      <span className="font-mono text-sm text-[#d8e3fb]">₹{level.value.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                    </div>
+            <h3 className="text-[10px] font-bold uppercase tracking-widest text-[#d8e3fb] border-b border-[#3b4a44] pb-2 mb-2">
+              Key Levels
+            </h3>
+            {loading ? <Skeleton className="h-40" /> : (
+              <div className="flex flex-col">
+                <LevelRow label="Resistance"  value={s.resistance}  color="#ffb4ab" />
+                <LevelRow label="Pivot R3"    value={s.pivot_r3}    color="#ffb4ab" dimmed />
+                <LevelRow label="Pivot R2"    value={s.pivot_r2}    color="#ffa858" dimmed />
+                <LevelRow label="Pivot R1"    value={s.pivot_r1}    color="#ffa858" />
+                <LevelRow label="Pivot"       value={s.pivot}       color="#d4a800" bold />
+                {cmp > 0 && (
+                  <div className="flex justify-between items-center py-1.5 border-b border-[#1e293b]/60 bg-[#00d4aa]/5 -mx-1 px-1 rounded my-0.5">
+                    <span className="text-[10px] font-bold text-[#00d4aa] uppercase">▶ CMP</span>
+                    <span className="font-mono text-sm font-bold text-[#00d4aa]">
+                      ₹{cmp.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </span>
                   </div>
-                ))}
+                )}
+                <LevelRow label="VWAP"        value={s.vwap}        color="#ff6b9d" bold />
+                <LevelRow label="Pivot S1"    value={s.pivot_s1}    color="#46f1c5" />
+                <LevelRow label="Pivot S2"    value={s.pivot_s2}    color="#46f1c5" dimmed />
+                <LevelRow label="Pivot S3"    value={s.pivot_s3}    color="#46f1c5" dimmed />
+                <LevelRow label="Support"     value={s.support}     color="#00d4aa" />
               </div>
             )}
           </div>
 
-          {/* Recent calls — requires DB; show graceful placeholder */}
-          <div className="bg-[#111c2d] border border-[#3b4a44] rounded flex flex-col flex-grow">
-            <div className="p-4 border-b border-[#3b4a44]">
-              <h3 className="text-[#d8e3fb] text-[11px] font-bold uppercase">Recent Calls History</h3>
+          {/* Camarilla */}
+          {!loading && (s.cam_r1 ?? 0) > 0 && (
+            <div className="bg-[#111c2d] border border-[#3b4a44] rounded p-4">
+              <h3 className="text-[10px] font-bold uppercase tracking-widest text-[#d8e3fb] border-b border-[#3b4a44] pb-2 mb-2">
+                Camarilla
+              </h3>
+              <div className="flex flex-col">
+                <LevelRow label="R3" value={s.cam_r3} color="#ffb4ab" />
+                <LevelRow label="R2" value={s.cam_r2} color="#ffa858" dimmed />
+                <LevelRow label="R1" value={s.cam_r1} color="#ffa858" dimmed />
+                {cmp > 0 && (
+                  <div className="flex justify-between items-center py-1 border-b border-[#1e293b]/60">
+                    <span className="text-[10px] text-[#00d4aa] font-bold uppercase">CMP</span>
+                    <span className="font-mono text-xs text-[#00d4aa]">
+                      ₹{cmp.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                )}
+                <LevelRow label="S1" value={s.cam_s1} color="#46f1c5" dimmed />
+                <LevelRow label="S2" value={s.cam_s2} color="#46f1c5" dimmed />
+                <LevelRow label="S3" value={s.cam_s3} color="#00d4aa" />
+              </div>
             </div>
-            <div className="p-4 flex flex-col items-center justify-center gap-2 text-center">
-              <span className="material-symbols-outlined text-[32px] text-[#3b4a44]">history</span>
-              <p className="text-xs text-[#bacac2]">Call history requires database connection.</p>
-              <p className="text-[10px] text-[#85948d]">Connect PostgreSQL to enable persistent call history.</p>
+          )}
+
+          {/* Fibonacci */}
+          {!loading && (s.fib_high ?? 0) > 0 && (
+            <div className="bg-[#111c2d] border border-[#3b4a44] rounded p-4">
+              <h3 className="text-[10px] font-bold uppercase tracking-widest text-[#d8e3fb] border-b border-[#3b4a44] pb-2 mb-2">
+                Fibonacci Retracement
+              </h3>
+              <div className="text-[9px] text-[#bacac2] mb-2">
+                High ₹{s.fib_high?.toLocaleString('en-IN')} · Low ₹{s.fib_low?.toLocaleString('en-IN')}
+              </div>
+              <div className="flex flex-col">
+                <LevelRow label="0% (High)" value={s.fib_high} color="#ffb4ab" />
+                <LevelRow label="23.6%"     value={s.fib_236}  color="#ffa858" />
+                <LevelRow label="38.2%"     value={s.fib_382}  color="#d4a800" />
+                <LevelRow label="50.0%"     value={s.fib_500}  color="#c0c6db" bold />
+                <LevelRow label="61.8%"     value={s.fib_618}  color="#46f1c5" />
+                <LevelRow label="78.6%"     value={s.fib_786}  color="#46f1c5" dimmed />
+                <LevelRow label="100% (Low)" value={s.fib_low} color="#00d4aa" />
+              </div>
             </div>
-          </div>
+          )}
+
         </div>
       </div>
     </main>

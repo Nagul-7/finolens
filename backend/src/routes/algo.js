@@ -314,6 +314,26 @@ router.post("/stop-all", async (req, res) => {
   return res.json({ stopped: true, timestamp: new Date().toISOString() });
 });
 
+// ─── POST /api/algo/paper-trade ──────────────────────────────────────────────
+// Place a manual paper trade from the Charts tab trade panel
+router.post("/paper-trade", async (req, res) => {
+  const { symbol, side, qty, order_type, price } = req.body;
+  if (!symbol || !side || !qty) {
+    return res.status(400).json({ error: "symbol, side, qty are required" });
+  }
+
+  let tradePrice = price ? parseFloat(price) : 0;
+  if (!tradePrice || order_type === "MARKET") {
+    try {
+      const quote = await mlService.getQuote(symbol.toUpperCase());
+      tradePrice = quote.ltp ?? quote.price ?? 0;
+    } catch { /* fall through — use 0 if unavailable */ }
+  }
+
+  const pos = algoEngine.placePaperTrade(symbol, side, parseInt(qty), tradePrice);
+  return res.status(201).json(pos);
+});
+
 // ─── GET /api/algo/logs ───────────────────────────────────────────────────────
 router.get("/logs", (_req, res) => res.json(algoEngine.getLogs()));
 

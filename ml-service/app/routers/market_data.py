@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Query
 from app.services.nse_client import fetch_live_quote, fetch_index_quote
 from app.models.schemas import LiveQuoteResponse, OHLCVBar, MarketIndexResponse, IndexQuote
 from datetime import datetime, timezone
+import math
 
 router = APIRouter(prefix="/market", tags=["market-data"])
 
@@ -25,10 +26,26 @@ async def get_quote(symbol: str):
         raise HTTPException(status_code=502, detail=f"Quote fetch failed: {exc}")
 
 
+def _safe_float(v):
+    """Return None for NaN/Inf so JSON serialization never crashes."""
+    try:
+        f = float(v)
+        return None if (math.isnan(f) or math.isinf(f)) else round(f, 2)
+    except (TypeError, ValueError):
+        return None
+
+
+def _safe_int(v):
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return 0
+
+
 @router.get("/ohlcv/{symbol}", response_model=list[OHLCVBar])
 async def get_ohlcv(
     symbol: str,
-    interval: str = Query("1d", description="1d | 1h | 5m | 15m"),
+    interval: str = Query("1d", description="1d | 5d | 1h | 5m | 15m | 1wk | 1mo | 3mo | 1y"),
     from_date: str | None = Query(None, alias="from"),
     to_date:   str | None = Query(None, alias="to"),
 ):
@@ -36,12 +53,20 @@ async def get_ohlcv(
     if symbol.endswith(".NS"):
         symbol = symbol[:-3]
 
+    # Map frontend interval strings -> (yfinance period default, yfinance interval string)
+    # The period is only used when no from/to date range is specified.
+    # Frontend timeframe buttons send: 1d=>'1d', 5d=>'5d', 1m=>'1mo', 3m=>'3mo', 1y=>'1y'
     _interval_map = {
-        "1d":  ("2y",  "1d"),
-        "1h":  ("60d", "1h"),
-        "5m":  ("5d",  "5m"),
-        "15m": ("7d",  "15m"),
-        "30m": ("14d", "30m"),
+        "1d":  ("5d",   "1d"),   # 1-day bar, 5-day window default
+        "5d":  ("1mo",  "1d"),   # 5-day timeframe -> 1 month of daily bars
+        "1h":  ("60d",  "1h"),
+        "5m":  ("5d",   "5m"),
+        "15m": ("7d",   "15m"),
+        "30m": ("14d",  "30m"),
+        "1wk": ("6mo",  "1wk"),  # weekly bars
+        "1mo": ("1y",   "1d"),   # 1-month view -> 1 year of daily bars
+        "3mo": ("2y",   "1d"),   # 3-month view -> 2 years of daily bars
+        "1y":  ("5y",   "1d"),   # 1-year view -> 5 years of daily bars
     }
     if interval not in _interval_map:
         raise HTTPException(
@@ -65,17 +90,25 @@ async def get_ohlcv(
         if df.empty:
             raise ValueError(f"No OHLCV data for '{symbol}'.")
 
-        return [
-            OHLCVBar(
+        bars = []
+        for ts, row in df.iterrows():
+            o  = _safe_float(row["Open"])
+            h  = _safe_float(row["High"])
+            lo = _safe_float(row["Low"])
+            c  = _safe_float(row["Close"])
+            v  = _safe_int(row["Volume"])
+            # Skip rows where core OHLC values are missing / NaN
+            if None in (o, h, lo, c):
+                continue
+            bars.append(OHLCVBar(
                 timestamp=str(ts),
-                open=round(float(row["Open"]), 2),
-                high=round(float(row["High"]), 2),
-                low=round(float(row["Low"]), 2),
-                close=round(float(row["Close"]), 2),
-                volume=int(row["Volume"]),
-            )
-            for ts, row in df.iterrows()
-        ]
+                open=o,
+                high=h,
+                low=lo,
+                close=c,
+                volume=v,
+            ))
+        return bars
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
@@ -86,7 +119,7 @@ async def get_ohlcv(
 async def get_index():
     """Return live quotes for Nifty 50 and Bank Nifty."""
     try:
-        nifty_data    = fetch_index_quote("^NSEI",    "NIFTY 50")
+        nifty_data     = fetch_index_quote("^NSEI",    "NIFTY 50")
         banknifty_data = fetch_index_quote("^NSEBANK", "BANK NIFTY")
         return MarketIndexResponse(
             nifty=IndexQuote(**nifty_data),

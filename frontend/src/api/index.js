@@ -25,4 +25,5 @@ export const getAlgoPnlToday        = ()             => api.get('/algo/pnl/today
 export const exitAlgoPosition       = (id)            => api.post(`/algo/positions/${id}/exit`)
 export const getAlgoTradesHistory   = ()             => api.get('/algo/trades/history')
 export const getAlgoLogs            = ()             => api.get('/algo/logs')
+export const placeManualTrade       = (data)          => api.post('/algo/paper-trade', data)
 

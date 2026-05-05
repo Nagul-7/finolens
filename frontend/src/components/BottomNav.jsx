@@ -4,7 +4,7 @@ const navItems = [
   { to: '/',            label: 'Home',        icon: 'home' },
   { to: '/intelligence/RELIANCE', label: 'Intelligence', icon: 'insights' },
   { to: '/options',     label: 'Options',     icon: 'legend_toggle' },
-  { to: '/screener',    label: 'Screener',    icon: 'filter_alt' },
+  { to: '/charts',      label: 'Charts',      icon: 'candlestick_chart' },
   { to: '/backtest',    label: 'Backtest',    icon: 'history_edu' },
   { to: '/algo',        label: 'Algo',        icon: 'precision_manufacturing' },
   { to: '/watchlist',   label: 'Watchlist',   icon: 'list_alt' },

@@ -89,7 +89,8 @@ export default function Watchlist() {
   const loadData = async () => {
     try {
       const [wRes, qRes] = await Promise.all([getWatchlist(), getWatchlistQuotes().catch(() => ({ data: [] }))])
-      setSymbols(wRes.data ?? [])
+      const raw = wRes.data ?? []
+      setSymbols(raw.map(item => (typeof item === 'string' ? item : item.symbol)))
       const qMap = {}
       for (const q of qRes.data ?? []) qMap[q.symbol] = q
       setQuotes(qMap)
@@ -103,7 +104,7 @@ export default function Watchlist() {
   useEffect(() => {
     loadData()
 
-    const socket = io('http://localhost:5000', { transports: ['websocket'] })
+    const socket = io({ transports: ['websocket', 'polling'], reconnectionAttempts: 10, reconnectionDelay: 1000 })
     socketRef.current = socket
 
     socket.on('new_call', data => {
@@ -131,9 +132,14 @@ export default function Watchlist() {
     })
 
     socket.on('price_update', data => {
+      const arr = Array.isArray(data) ? data : (data.quotes ?? (data.symbol ? [data] : []))
+      if (!arr.length) return
       setQuotes(prev => {
-        if (!data.symbol) return prev
-        return { ...prev, [data.symbol]: { ...(prev[data.symbol] ?? {}), ...data } }
+        const next = { ...prev }
+        for (const q of arr) {
+          if (q.symbol) next[q.symbol] = { ...(prev[q.symbol] ?? {}), ...q }
+        }
+        return next
       })
     })
 

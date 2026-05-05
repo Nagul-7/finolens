@@ -151,6 +151,39 @@ def compute_technical_signals(symbol: str) -> TechnicalSignalResponse:
     support    = round(float(low.iloc[-lookback:].min()), 2)
     resistance = round(float(high.iloc[-lookback:].max()), 2)
 
+    # ── Pivot points (Standard) — use previous session H/L/C ───────────
+    prev_h = _safe(float(high.iloc[-2])) if len(high) > 1 else _safe(float(high.iloc[-1]))
+    prev_l = _safe(float(low.iloc[-2]))  if len(low)  > 1 else _safe(float(low.iloc[-1]))
+    prev_c = _safe(float(close.iloc[-2])) if len(close) > 1 else cur_close
+
+    piv   = (prev_h + prev_l + prev_c) / 3
+    p_r1  = 2 * piv - prev_l
+    p_s1  = 2 * piv - prev_h
+    p_r2  = piv + (prev_h - prev_l)
+    p_s2  = piv - (prev_h - prev_l)
+    p_r3  = prev_h + 2 * (piv - prev_l)
+    p_s3  = prev_l - 2 * (prev_h - piv)
+
+    # ── Camarilla levels ────────────────────────────────────────────────
+    rng   = prev_h - prev_l
+    c_r1  = prev_c + rng * 1.1 / 12
+    c_r2  = prev_c + rng * 1.1 / 6
+    c_r3  = prev_c + rng * 1.1 / 4
+    c_s1  = prev_c - rng * 1.1 / 12
+    c_s2  = prev_c - rng * 1.1 / 6
+    c_s3  = prev_c - rng * 1.1 / 4
+
+    # ── Fibonacci retracement (swing high/low over last 50 candles) ─────
+    fb_lb   = min(50, len(df))
+    fb_high = _safe(float(high.iloc[-fb_lb:].max()))
+    fb_low  = _safe(float(low.iloc[-fb_lb:].min()))
+    fb_rng  = fb_high - fb_low
+    f236    = fb_high - 0.236 * fb_rng
+    f382    = fb_high - 0.382 * fb_rng
+    f500    = fb_high - 0.500 * fb_rng
+    f618    = fb_high - 0.618 * fb_rng
+    f786    = fb_high - 0.786 * fb_rng
+
     rsi_s  = _rsi_score(rsi_val)
     macd_s = _macd_score(macd_val, sig_val, hist_val, prev_hist)
     bb_s   = _bb_score(cur_close, bb_up, bb_lo)
@@ -180,5 +213,13 @@ def compute_technical_signals(symbol: str) -> TechnicalSignalResponse:
         volume_anomaly=vol_ratio_val > 2.0,
         support=support,
         resistance=resistance,
+        pivot=round(piv, 2),
+        pivot_r1=round(p_r1, 2), pivot_r2=round(p_r2, 2), pivot_r3=round(p_r3, 2),
+        pivot_s1=round(p_s1, 2), pivot_s2=round(p_s2, 2), pivot_s3=round(p_s3, 2),
+        cam_r1=round(c_r1, 2), cam_r2=round(c_r2, 2), cam_r3=round(c_r3, 2),
+        cam_s1=round(c_s1, 2), cam_s2=round(c_s2, 2), cam_s3=round(c_s3, 2),
+        fib_high=round(fb_high, 2), fib_low=round(fb_low, 2),
+        fib_236=round(f236, 2), fib_382=round(f382, 2), fib_500=round(f500, 2),
+        fib_618=round(f618, 2), fib_786=round(f786, 2),
         technical_score=tech_score,
     )

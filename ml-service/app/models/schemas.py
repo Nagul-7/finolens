@@ -119,6 +119,32 @@ class TechnicalSignalResponse(BaseModel):
     support: float = 0.0
     resistance: float = 0.0
 
+    # Standard Pivot Points (previous session H/L/C)
+    pivot: float = 0.0
+    pivot_r1: float = 0.0
+    pivot_r2: float = 0.0
+    pivot_r3: float = 0.0
+    pivot_s1: float = 0.0
+    pivot_s2: float = 0.0
+    pivot_s3: float = 0.0
+
+    # Camarilla Levels
+    cam_r1: float = 0.0
+    cam_r2: float = 0.0
+    cam_r3: float = 0.0
+    cam_s1: float = 0.0
+    cam_s2: float = 0.0
+    cam_s3: float = 0.0
+
+    # Fibonacci Retracement (swing over last 50 candles)
+    fib_high: float = 0.0
+    fib_low: float = 0.0
+    fib_236: float = 0.0
+    fib_382: float = 0.0
+    fib_500: float = 0.0
+    fib_618: float = 0.0
+    fib_786: float = 0.0
+
     # Aggregate
     technical_score: float = Field(..., ge=0, le=100)
 

@@ -167,7 +167,9 @@ function runBacktest(bars, strategyName, capital) {
 
 // POST /api/backtest/run
 router.post("/run", async (req, res) => {
-  const { symbol = "NIFTY", from_date, to_date, strategy = "Mean Reversion (Nifty 50)", capital = 500000 } = req.body;
+  const { symbol = "NIFTY", strategy = "Mean Reversion (Nifty 50)", capital = 500000 } = req.body;
+  const from_date = req.body.from_date || req.body.from;
+  const to_date   = req.body.to_date   || req.body.to;
 
   try {
     const params = { interval: "1d" };

@@ -314,6 +314,27 @@ const algoEngine = {
     if (this._io) this._io.emit("algo_stopped", { timestamp: new Date().toISOString() });
   },
 
+  placePaperTrade(symbol, side, qty, price) {
+    const pos = {
+      id:            uuidv4(),
+      strategy_id:   "manual",
+      strategy_name: "Manual Trade",
+      symbol:        symbol.toUpperCase(),
+      side:          side.toUpperCase(),
+      qty:           Math.max(1, Math.floor(qty)),
+      entry_price:   price || 0,
+      current_price: price || 0,
+      peak_price:    price || 0,
+      pnl:           0,
+      status:        "OPEN",
+      entry_time:    new Date().toISOString(),
+    };
+    _openPositions.push(pos);
+    _log("INFO", `Manual paper trade: ${pos.side} ${pos.qty} ${pos.symbol} @ ₹${pos.entry_price}`);
+    if (this._io) this._io.emit("new_algo_trade", { ...pos });
+    return pos;
+  },
+
   exitPosition(posId, manualPrice) {
     const pos = _openPositions.find(p => p.id === posId);
     if (!pos) return null;
