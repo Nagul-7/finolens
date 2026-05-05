@@ -135,7 +135,7 @@ function ManualChart({ ohlcv, indicators, activeTool, drawings, selectedId, onAd
     const candles = (ohlcv ?? [])
       .filter(r => r.open && r.close)
       .map(r => ({
-        time: r.timestamp.split(' ')[0],
+        time: typeof r.timestamp === 'number' ? r.timestamp : r.timestamp.split(' ')[0],
         open: r.open, high: r.high, low: r.low, close: r.close,
         volume: r.volume ?? 0,
       }))

@@ -65,7 +65,7 @@ class LiveQuoteResponse(BaseModel):
 
 
 class OHLCVBar(BaseModel):
-    timestamp: str
+    timestamp: str | int
     open: float
     high: float
     low: float
@@ -144,6 +144,12 @@ class TechnicalSignalResponse(BaseModel):
     fib_500: float = 0.0
     fib_618: float = 0.0
     fib_786: float = 0.0
+
+    # Per-indicator scores (0–100)
+    rsi_score: float = 50.0
+    macd_score: float = 50.0
+    volume_score: float = 50.0
+    bb_score: float = 50.0
 
     # Aggregate
     technical_score: float = Field(..., ge=0, le=100)

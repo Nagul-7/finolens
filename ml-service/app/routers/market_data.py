@@ -56,18 +56,20 @@ async def get_ohlcv(
     # Map frontend interval strings -> (yfinance period default, yfinance interval string)
     # The period is only used when no from/to date range is specified.
     # Frontend timeframe buttons send: 1d=>'1d', 5d=>'5d', 1m=>'1mo', 3m=>'3mo', 1y=>'1y'
+    # yfinance only accepts: 1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max
     _interval_map = {
-        "1d":  ("5d",   "1d"),   # 1-day bar, 5-day window default
-        "5d":  ("1mo",  "1d"),   # 5-day timeframe -> 1 month of daily bars
-        "1h":  ("60d",  "1h"),
+        "1d":  ("5d",   "1d"),
+        "5d":  ("1mo",  "1d"),
+        "1h":  ("3mo",  "1h"),
         "5m":  ("5d",   "5m"),
-        "15m": ("7d",   "15m"),
-        "30m": ("14d",  "30m"),
-        "1wk": ("6mo",  "1wk"),  # weekly bars
-        "1mo": ("1y",   "1d"),   # 1-month view -> 1 year of daily bars
-        "3mo": ("2y",   "1d"),   # 3-month view -> 2 years of daily bars
-        "1y":  ("5y",   "1d"),   # 1-year view -> 5 years of daily bars
+        "15m": ("5d",   "15m"),
+        "30m": ("1mo",  "30m"),
+        "1wk": ("6mo",  "1wk"),
+        "1mo": ("1y",   "1d"),
+        "3mo": ("2y",   "1d"),
+        "1y":  ("5y",   "1d"),
     }
+    _intraday = {"5m", "15m", "30m", "1h"}
     if interval not in _interval_map:
         raise HTTPException(
             status_code=422,
@@ -90,6 +92,7 @@ async def get_ohlcv(
         if df.empty:
             raise ValueError(f"No OHLCV data for '{symbol}'.")
 
+        is_intraday = yf_interval in _intraday
         bars = []
         for ts, row in df.iterrows():
             o  = _safe_float(row["Open"])
@@ -97,11 +100,11 @@ async def get_ohlcv(
             lo = _safe_float(row["Low"])
             c  = _safe_float(row["Close"])
             v  = _safe_int(row["Volume"])
-            # Skip rows where core OHLC values are missing / NaN
             if None in (o, h, lo, c):
                 continue
+            timestamp = int(ts.timestamp()) if is_intraday else ts.strftime('%Y-%m-%d')
             bars.append(OHLCVBar(
-                timestamp=str(ts),
+                timestamp=timestamp,
                 open=o,
                 high=h,
                 low=lo,

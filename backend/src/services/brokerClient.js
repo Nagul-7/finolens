@@ -40,6 +40,27 @@ const yfinanceProvider = {
     // yfinance options data is unreliable for Indian markets — not implemented
     throw new Error("Options chain not available via yfinance. Connect a real broker.");
   },
+
+  async placeOrder(symbol, side, qty, orderType = "MARKET", price = 0) {
+    return {
+      order_id:  "PAPER_" + Date.now(),
+      symbol:    symbol.toUpperCase(),
+      side,
+      qty,
+      price:     price || 0,
+      orderType,
+      status:    "PAPER_COMPLETE",
+      timestamp: new Date().toISOString(),
+    };
+  },
+
+  async cancelOrder(orderId) {
+    return { cancelled: orderId };
+  },
+
+  async getPositions() {
+    return [];  // paper positions managed by algoEngine
+  },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -87,6 +108,22 @@ const zerodhaProvider = {
     // TODO: fetch instruments list, filter NFO options for symbol + expiry
     throw new Error("Zerodha options chain stub — implement with kite.getInstruments('NFO').");
   },
+
+  async placeOrder(symbol, side, qty, orderType = "MARKET", price = 0) {
+    const kite = this._kite();
+    // TODO: implement when credentials available
+    throw new Error("Zerodha order placement — add credentials first");
+  },
+
+  async cancelOrder(orderId) {
+    const kite = this._kite();
+    throw new Error("Zerodha cancelOrder — add credentials first");
+  },
+
+  async getPositions() {
+    const kite = this._kite();
+    throw new Error("Zerodha getPositions — add credentials first");
+  },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -129,6 +166,22 @@ const angelProvider = {
   async getOptionsChain(symbol, expiry) {
     throw new Error("Angel One options chain stub — implement with client.getOptionGreeks().");
   },
+
+  async placeOrder(symbol, side, qty, orderType = "MARKET", price = 0) {
+    const client = this._client();
+    // TODO: implement when credentials available
+    throw new Error("Angel order placement — add credentials first");
+  },
+
+  async cancelOrder(orderId) {
+    const client = this._client();
+    throw new Error("Angel cancelOrder — add credentials first");
+  },
+
+  async getPositions() {
+    const client = this._client();
+    throw new Error("Angel getPositions — add credentials first");
+  },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -148,31 +201,27 @@ if (!provider) {
 console.log(`[brokerClient] Active provider: ${BROKER}`);
 
 module.exports = {
-  /**
-   * Latest price + basic quote for an NSE symbol.
-   * @param {string} symbol  e.g. "RELIANCE"
-   * @returns {Promise<{symbol, price, volume, ...}>}
-   */
   getLiveQuote: (symbol) => provider.getLiveQuote(symbol),
 
-  /**
-   * Historical OHLCV bars.
-   * @param {string} symbol
-   * @param {string} interval  e.g. "1d" | "1h" | "5m"
-   * @param {string|null} from  ISO date or null
-   * @param {string|null} to    ISO date or null
-   * @returns {Promise<Array<{date, open, high, low, close, volume}>>}
-   */
   getHistoricalOHLCV: (symbol, interval, from, to) =>
     provider.getHistoricalOHLCV(symbol, interval, from, to),
 
-  /**
-   * Options chain for a symbol and expiry.
-   * @param {string} symbol
-   * @param {string} expiry  e.g. "2025-05-29"
-   */
   getOptionsChain: (symbol, expiry) => provider.getOptionsChain(symbol, expiry),
 
-  /** Expose which provider is active for health/debug endpoints. */
+  /**
+   * Place an order.
+   * @param {string} symbol     NSE symbol e.g. "RELIANCE"
+   * @param {string} side       "BUY" | "SELL"
+   * @param {number} qty        Number of shares
+   * @param {string} orderType  "MARKET" | "LIMIT"
+   * @param {number} price      Limit price (0 for market orders)
+   */
+  placeOrder: (symbol, side, qty, orderType = "MARKET", price = 0) =>
+    provider.placeOrder(symbol, side, qty, orderType, price),
+
+  cancelOrder: (orderId) => provider.cancelOrder(orderId),
+
+  getPositions: () => provider.getPositions(),
+
   activeBroker: BROKER,
 };

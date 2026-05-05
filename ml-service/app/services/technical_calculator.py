@@ -192,6 +192,12 @@ def compute_technical_signals(symbol: str) -> TechnicalSignalResponse:
 
     tech_score = _aggregate_score(rsi_s, macd_s, bb_s, vwap_s, ema_s, vol_ratio_val)
 
+    # Per-indicator scores mapped to 0–100 for the UI breakdown bars
+    rsi_score_100    = round(min(100.0, max(0.0, 50.0 + rsi_s  * 50.0)), 1)
+    macd_score_100   = round(min(100.0, max(0.0, 50.0 + macd_s * 50.0)), 1)
+    bb_score_100     = round(min(100.0, max(0.0, 50.0 + bb_s   * 50.0)), 1)
+    volume_score_100 = round(min(100.0, max(0.0, vol_ratio_val * 50.0)), 1)
+
     return TechnicalSignalResponse(
         symbol=symbol,
         timestamp=datetime.now(timezone.utc),
@@ -221,5 +227,9 @@ def compute_technical_signals(symbol: str) -> TechnicalSignalResponse:
         fib_high=round(fb_high, 2), fib_low=round(fb_low, 2),
         fib_236=round(f236, 2), fib_382=round(f382, 2), fib_500=round(f500, 2),
         fib_618=round(f618, 2), fib_786=round(f786, 2),
+        rsi_score=rsi_score_100,
+        macd_score=macd_score_100,
+        bb_score=bb_score_100,
+        volume_score=volume_score_100,
         technical_score=tech_score,
     )

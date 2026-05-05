@@ -96,3 +96,52 @@ def volume_ratio(volumes: pd.Series, period: int = 20) -> pd.Series:
     """
     avg = volumes.rolling(window=period).mean()
     return volumes / avg.replace(0, np.nan)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Pivot Points  (standard or camarilla)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def pivot_points(high: float, low: float, close: float, method: str = 'standard') -> dict:
+    """
+    Classic pivot levels from previous session H/L/C.
+    method='standard'  — floor pivot formula
+    method='camarilla' — Camarilla formula (H/L * 1.1 coefficients)
+    """
+    pp = (high + low + close) / 3
+    if method == 'standard':
+        r1 = 2 * pp - low
+        r2 = pp + (high - low)
+        r3 = high + 2 * (pp - low)
+        s1 = 2 * pp - high
+        s2 = pp - (high - low)
+        s3 = low - 2 * (high - pp)
+    elif method == 'camarilla':
+        diff = high - low
+        r1 = close + diff * 1.1 / 12
+        r2 = close + diff * 1.1 / 6
+        r3 = close + diff * 1.1 / 4
+        s1 = close - diff * 1.1 / 12
+        s2 = close - diff * 1.1 / 6
+        s3 = close - diff * 1.1 / 4
+    else:
+        raise ValueError(f"Unknown pivot method '{method}'. Use 'standard' or 'camarilla'.")
+    return {'pp': pp, 'r1': r1, 'r2': r2, 'r3': r3, 's1': s1, 's2': s2, 's3': s3}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Fibonacci Retracement Levels
+# ─────────────────────────────────────────────────────────────────────────────
+
+def fibonacci_levels(swing_high: float, swing_low: float) -> dict:
+    """Classic Fibonacci retracement levels between a swing high and swing low."""
+    diff = swing_high - swing_low
+    return {
+        '0':    swing_low,
+        '23.6': swing_low + 0.236 * diff,
+        '38.2': swing_low + 0.382 * diff,
+        '50':   swing_low + 0.500 * diff,
+        '61.8': swing_low + 0.618 * diff,
+        '78.6': swing_low + 0.786 * diff,
+        '100':  swing_high,
+    }

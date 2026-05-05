@@ -103,8 +103,8 @@ function MainChart({ ohlcv, interval, emaPeriod, showBB, showVWAP, showST, overl
     const candles = ohlcv
       .filter(r => r.open && r.close)
       .map(r => ({
-        time: isIntraday
-          ? Math.floor(new Date(r.timestamp.replace(' ', 'T')).getTime() / 1000)
+        time: typeof r.timestamp === 'number'
+          ? r.timestamp
           : r.timestamp.split(' ')[0],
         open: r.open, high: r.high, low: r.low, close: r.close, volume: r.volume ?? 0,
       }))
@@ -282,10 +282,10 @@ export default function Intelligence() {
   const cmp = ltp || s.current_price || 0
   const scoreItems = [
     { label: 'Technical Score', score: s.technical_score ?? 0 },
-    { label: 'RSI Zone',        score: s.rsi != null ? Math.round(100 - Math.abs(s.rsi - 50) * 2) : 50 },
-    { label: 'MACD Momentum',   score: s.macd_hist != null ? Math.min(100, Math.max(0, 50 + s.macd_hist * 20)) : 50 },
-    { label: 'Volume Strength', score: s.volume_ratio != null ? Math.min(100, Math.round(s.volume_ratio * 40)) : 40 },
-    { label: 'BB Position',     score: s.bb_position != null ? Math.round(100 - Math.abs(s.bb_position - 50) * 1.5) : 50 },
+    { label: 'RSI Zone',        score: s.rsi_score    ?? 50 },
+    { label: 'MACD Momentum',   score: s.macd_score   ?? 50 },
+    { label: 'Volume Strength', score: s.volume_score ?? 50 },
+    { label: 'BB Position',     score: s.bb_score     ?? 50 },
   ]
 
   return (
