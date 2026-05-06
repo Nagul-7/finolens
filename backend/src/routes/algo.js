@@ -315,23 +315,38 @@ router.post("/stop-all", async (req, res) => {
 });
 
 // ─── POST /api/algo/paper-trade ──────────────────────────────────────────────
-// Place a manual paper trade from the Charts tab trade panel
+// Place a manual trade from the Charts tab — routes to paper or live broker
 router.post("/paper-trade", async (req, res) => {
-  const { symbol, side, qty, order_type, price } = req.body;
+  const { symbol, side, qty, order_type, price, mode = "paper" } = req.body;
   if (!symbol || !side || !qty) {
     return res.status(400).json({ error: "symbol, side, qty are required" });
   }
 
-  let tradePrice = price ? parseFloat(price) : 0;
-  if (!tradePrice || order_type === "MARKET") {
-    try {
-      const quote = await mlService.getQuote(symbol.toUpperCase());
-      tradePrice = quote.ltp ?? quote.price ?? 0;
-    } catch { /* fall through — use 0 if unavailable */ }
-  }
+  try {
+    if (mode === "live") {
+      const brokerClient = require("../services/brokerClient");
+      if (brokerClient.activeBroker === "yfinance") {
+        return res.status(400).json({
+          error: "Live trading requires a real broker. Set BROKER=zerodha or BROKER=angel in .env and add your API credentials.",
+        });
+      }
+      const order = await brokerClient.placeOrder(symbol, side, parseInt(qty), order_type || "MARKET", price || 0);
+      return res.status(201).json({ ...order, mode: "live", strategy_id: "manual" });
+    }
 
-  const pos = algoEngine.placePaperTrade(symbol, side, parseInt(qty), tradePrice);
-  return res.status(201).json(pos);
+    // Paper trade
+    let tradePrice = price ? parseFloat(price) : 0;
+    if (!tradePrice || order_type === "MARKET") {
+      try {
+        const quote = await mlService.getQuote(symbol.toUpperCase());
+        tradePrice = quote.ltp ?? quote.price ?? 0;
+      } catch { /* fall through */ }
+    }
+    const pos = algoEngine.placePaperTrade(symbol, side, parseInt(qty), tradePrice);
+    return res.status(201).json({ ...pos, mode: "paper" });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
 });
 
 // ─── GET /api/algo/logs ───────────────────────────────────────────────────────

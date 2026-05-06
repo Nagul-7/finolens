@@ -80,6 +80,14 @@ app.get("/health", (_req, res) =>
   res.json({ status: "ok", service: "finolens-backend", version: "2.0.0" })
 );
 
+app.get("/api/broker/status", (_req, res) => {
+  const brokerClient = require("./services/brokerClient");
+  res.json({
+    broker: brokerClient.activeBroker,
+    live_trading_available: brokerClient.activeBroker !== "yfinance",
+  });
+});
+
 app.use(notFound);
 app.use(errorHandler);
 

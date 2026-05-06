@@ -38,10 +38,23 @@ const _strategies  = [
     universe: "NIFTY50", timeframe: "1h", capital: 250000,
     capital_per_trade: 25000, max_concurrent: 2, max_trades: 10,
     target_pct: 1.5, sl_pct: 0.8, trailing_sl: false, daily_loss_limit: 5000,
+    holding_period: "intraday",
     today_pnl: 0, trades_today: 0, created_at: new Date().toISOString(),
     entry_rules: [
       { indicator: "rsi", operator: "lt", value: 40 },
       { indicator: "macd_hist", operator: "gt", value: 0 },
+    ],
+  },
+  {
+    id: "3", name: "Swing Momentum (NIFTY 50)", status: "PAUSED", mode: "PAPER",
+    universe: "NIFTY50", timeframe: "1d", capital: 150000,
+    capital_per_trade: 50000, max_concurrent: 3, max_trades: 15,
+    target_pct: 5.0, sl_pct: 2.5, trailing_sl: true, trailing_sl_pct: 1.5,
+    daily_loss_limit: 15000, holding_period: "swing",
+    today_pnl: 0, trades_today: 0, created_at: new Date().toISOString(),
+    entry_rules: [
+      { indicator: "technical_score", operator: "gt", value: 62 },
+      { indicator: "volume_ratio",    operator: "gt", value: 1.3 },
     ],
   },
 ];
@@ -173,8 +186,8 @@ const algoEngine = {
         if (ltp >= targetPrice) exitReason = "TARGET_HIT";
         if (ltp <= effectiveSL) exitReason = strat.trailing_sl ? "TRAILING_SL_HIT" : "STOP_LOSS_HIT";
 
-        // Max hold: intraday — exit at 15:15 IST
-        if (!exitReason) {
+        // Max hold: intraday strategies exit at 15:15 IST; swing strategies hold until target/SL
+        if (!exitReason && strat.holding_period !== "swing") {
           const istNow = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
           const mins   = istNow.getHours() * 60 + istNow.getMinutes();
           if (mins >= 915) exitReason = "MAX_HOLD_INTRADAY";

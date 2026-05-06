@@ -46,7 +46,7 @@ function IndicatorSettingsPopup({ type, onConfirm, onCancel }) {
   const [vals, setVals] = useState(Object.fromEntries(def.fields.map(f => [f.key, f.default])))
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onCancel}>
-      <div className="bg-[#111c2d] border border-[#2a3548] rounded-lg p-4 w-60" onClick={e => e.stopPropagation()}>
+      <div className="bg-[#111c2d] border border-[#2a3548] rounded-lg p-5 w-64 shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="text-sm font-bold text-[#d8e3fb] mb-3">{def.label} Settings</div>
         {def.fields.map(f => (
           <div key={f.key} className="flex items-center justify-between mb-2">
@@ -58,9 +58,15 @@ function IndicatorSettingsPopup({ type, onConfirm, onCancel }) {
             />
           </div>
         ))}
-        <div className="flex gap-2 mt-3">
-          <button onClick={() => onConfirm(vals)} className="flex-1 py-1.5 rounded bg-[#00d4aa]/20 text-[#00d4aa] text-xs font-bold hover:bg-[#00d4aa]/30">Add</button>
-          <button onClick={onCancel} className="flex-1 py-1.5 rounded bg-[#1a2540] text-[#bacac2] text-xs hover:bg-[#2a3548]">Cancel</button>
+        <div className="flex gap-2 mt-4">
+          <button onClick={() => onConfirm(vals)}
+            className="flex-1 py-2 rounded bg-[#00d4aa]/20 text-[#00d4aa] text-xs font-bold hover:bg-[#00d4aa]/30 transition-colors">
+            Add
+          </button>
+          <button onClick={onCancel}
+            className="flex-1 py-2 rounded bg-[#1a2540] text-[#bacac2] text-xs hover:bg-[#2a3548] transition-colors">
+            Cancel
+          </button>
         </div>
       </div>
     </div>
@@ -366,39 +372,74 @@ function ManualChart({ ohlcv, indicators, activeTool, drawings, selectedId, onAd
 }
 
 // ─── Trade Panel ──────────────────────────────────────────────────────────────
-function TradePanel({ symbol, positions, onTrade, sessionPnl }) {
+function TradePanel({ symbol, positions, onTrade, sessionPnl, brokerStatus }) {
   const [side,      setSide]      = useState('BUY')
   const [qty,       setQty]       = useState(1)
   const [orderType, setOrderType] = useState('MARKET')
   const [price,     setPrice]     = useState('')
   const [placing,   setPlacing]   = useState(false)
   const [toast,     setToast]     = useState(null)
+  const [mode,      setMode]      = useState(
+    () => localStorage.getItem('tradeMode') || 'paper'
+  )
+
+  const setTradeMode = m => { setMode(m); localStorage.setItem('tradeMode', m) }
 
   const submit = async () => {
     setPlacing(true)
     try {
-      await onTrade({ symbol, side, qty: parseInt(qty), order_type: orderType, price: orderType === 'LIMIT' ? parseFloat(price) : undefined })
-      setToast({ ok: true, msg: `${side} ${qty} ${symbol} placed` })
-    } catch {
-      setToast({ ok: false, msg: 'Trade failed' })
+      const payload = {
+        symbol,
+        side,
+        qty: parseInt(qty),
+        order_type: orderType,
+        price: orderType === 'LIMIT' ? parseFloat(price) : undefined,
+        mode,
+      }
+      await onTrade(payload)
+      setToast({ ok: true, msg: `${mode === 'live' ? 'LIVE' : 'PAPER'} ${side} ${qty} ${symbol} placed` })
+    } catch (e) {
+      setToast({ ok: false, msg: e?.response?.data?.error || 'Trade failed' })
     } finally {
       setPlacing(false)
-      setTimeout(() => setToast(null), 3000)
+      setTimeout(() => setToast(null), 4000)
     }
   }
 
+  const liveAvailable = brokerStatus?.live_trading_available ?? false
+
   return (
     <div className="border-t border-[#1e293b] bg-[#0a0e1a] shrink-0">
-      <div className="px-3 pt-2 pb-1 flex items-center gap-3 flex-wrap">
-        <span className="text-[9px] font-bold uppercase tracking-widest text-[#bacac2]">Trade Panel</span>
-        <span className="text-[9px] text-[#ffa858] font-bold">● Paper Trade — Simulation Only</span>
+      {/* Mode toggle row */}
+      <div className="flex items-center gap-2 px-3 pt-2 pb-1 border-b border-[#1e293b] flex-wrap">
+        <span className="text-[9px] font-bold uppercase tracking-widest text-[#bacac2]">Mode:</span>
+        <div className="flex rounded overflow-hidden border border-[#2a3548]">
+          <button
+            onClick={() => setTradeMode('paper')}
+            className={`px-3 py-1 text-xs font-bold transition-colors ${mode === 'paper' ? 'bg-[#ffa858]/20 text-[#ffa858]' : 'text-[#4a5568] hover:text-[#bacac2]'}`}>
+            PAPER
+          </button>
+          <button
+            onClick={() => setTradeMode('live')}
+            className={`px-3 py-1 text-xs font-bold transition-colors ${mode === 'live' ? 'bg-[#00d4aa]/20 text-[#00d4aa]' : 'text-[#4a5568] hover:text-[#bacac2]'}`}>
+            LIVE
+          </button>
+        </div>
+        {mode === 'paper' && <span className="text-[9px] text-[#ffa858] font-bold">● Simulation Only</span>}
+        {mode === 'live'  && <span className="text-[9px] text-[#00d4aa] font-bold">● Live Trading Active</span>}
         <span className={`ml-auto text-xs font-mono font-bold ${sessionPnl >= 0 ? 'text-[#00d4aa]' : 'text-[#ffb4ab]'}`}>
-          Session P&L: {sessionPnl >= 0 ? '+' : ''}₹{sessionPnl.toFixed(0)}
+          P&L: {sessionPnl >= 0 ? '+' : ''}₹{sessionPnl.toFixed(0)}
         </span>
         {toast && (
           <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${toast.ok ? 'bg-[#00d4aa]/10 text-[#00d4aa]' : 'bg-[#ffb4ab]/10 text-[#ffb4ab]'}`}>{toast.msg}</span>
         )}
       </div>
+      {/* Live unavailable warning */}
+      {mode === 'live' && !liveAvailable && (
+        <div className="mx-3 mt-1.5 mb-1 p-2 rounded bg-[#ffb4ab]/10 border border-[#ffb4ab]/30 text-[#ffb4ab] text-[10px]">
+          ⚠ Live trading requires Zerodha or Angel One API. Add credentials to .env and set BROKER=zerodha to enable.
+        </div>
+      )}
       <div className="px-3 pb-2 flex items-center gap-2 flex-wrap">
         <div className="flex rounded overflow-hidden border border-[#2a3548]">
           {['BUY','SELL'].map(s => (
@@ -582,8 +623,9 @@ export default function Charts() {
   }, [handleUndo, handleDeleteDrawing])
 
   // ── Positions & trading ───────────────────────────────────────────────────
-  const [positions,  setPositions]  = useState([])
-  const [sessionPnl, setSessionPnl] = useState(0)
+  const [positions,    setPositions]    = useState([])
+  const [sessionPnl,   setSessionPnl]   = useState(0)
+  const [brokerStatus, setBrokerStatus] = useState({ broker: 'yfinance', live_trading_available: false })
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -599,6 +641,13 @@ export default function Charts() {
   useEffect(() => {
     getAlgoPositions()
       .then(r => setPositions((r.data ?? []).filter(p => p.strategy_id === 'manual')))
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    fetch('http://localhost:5000/api/broker/status')
+      .then(r => r.json())
+      .then(setBrokerStatus)
       .catch(() => {})
   }, [])
 
@@ -727,7 +776,7 @@ export default function Charts() {
       </div>
 
       {/* ── Trade Panel ──────────────────────────────────────────────────────── */}
-      <TradePanel symbol={symbol} positions={positions} onTrade={handleTrade} sessionPnl={sessionPnl} />
+      <TradePanel symbol={symbol} positions={positions} onTrade={handleTrade} sessionPnl={sessionPnl} brokerStatus={brokerStatus} />
 
       {/* ── Right-click context menu ─────────────────────────────────────────── */}
       {contextMenu && (

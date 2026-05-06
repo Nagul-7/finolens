@@ -375,11 +375,16 @@ export default function Intelligence() {
                     ? 'border-[#5588cc]/60 bg-[#5588cc]/10 text-[#5588cc]' : 'border-[#2a3548] text-[#4a5568]'}`}>
                   BB(20)
                 </button>
-                <div className="flex items-center gap-1 border border-[#ffa858]/40 bg-[#ffa858]/8 rounded px-1.5 py-0.5">
-                  <span className="text-[9px] text-[#ffa858] font-bold">EMA</span>
-                  <input type="number" min="5" max="200" value={emaPeriod}
-                    onChange={e => setEmaPeriod(Math.max(5, Math.min(200, +e.target.value)))}
-                    className="w-8 bg-transparent text-[#ffa858] font-mono text-[9px] outline-none text-right" />
+                <div className="flex items-center gap-1.5 border border-[#ffa858]/40 bg-[#ffa858]/10 rounded px-2 py-0.5 min-w-[72px]">
+                  <span className="text-[9px] text-[#ffa858] font-bold whitespace-nowrap">EMA</span>
+                  <input
+                    type="number"
+                    min="5"
+                    max="200"
+                    value={emaPeriod}
+                    onChange={e => setEmaPeriod(Math.max(5, Math.min(200, +e.target.value || 21)))}
+                    className="w-10 bg-[#0d1829] border border-[#ffa858]/30 rounded px-1 text-[#ffa858] font-mono text-[10px] outline-none text-center"
+                  />
                 </div>
               </div>
             </div>
@@ -468,6 +473,14 @@ export default function Intelligence() {
 
         {/* ── RIGHT: signal panel ── */}
         <div className="xl:col-span-4 flex flex-col gap-3">
+
+          {/* Friday overnight swing-trade warning */}
+          {new Date().getDay() === 5 && (
+            <div className="p-2 rounded bg-[#ffa858]/10 border border-[#ffa858]/30 text-[#ffa858] text-[10px] flex items-center gap-2">
+              <span>⚠</span>
+              <span>Friday — check earnings calendar before holding positions overnight into weekend gap risk</span>
+            </div>
+          )}
 
           {/* Algorithmic Signal */}
           <div className="bg-[#111c2d] border border-[#3b4a44] rounded p-4 flex flex-col items-center text-center">
