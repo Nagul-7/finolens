@@ -1,18 +1,11 @@
 @echo off
-title FinoLens Terminal — Launcher
+title FinoLens Terminal - Launcher
 color 0A
 cls
 
 echo.
-echo  ████████╗██╗███╗   ██╗ ██████╗ ██╗     ███████╗███╗   ██╗███████╗
-echo  ██╔════╝██║████╗  ██║██╔═══██╗██║     ██╔════╝████╗  ██║██╔════╝
-echo  █████╗  ██║██╔██╗ ██║██║   ██║██║     █████╗  ██╔██╗ ██║███████╗
-echo  ██╔══╝  ██║██║╚██╗██║██║   ██║██║     ██╔══╝  ██║╚██╗██║╚════██║
-echo  ██║     ██║██║ ╚████║╚██████╔╝███████╗███████╗██║ ╚████║███████║
-echo  ╚═╝     ╚═╝╚═╝  ╚═══╝ ╚═════╝ ╚══════╝╚══════╝╚═╝  ╚═══╝╚══════╝
-echo.
-echo  Starting FinoLens Terminal...
-echo  ─────────────────────────────────────────────────────────
+echo  FinoLens Terminal - Starting...
+echo  ---------------------------------------------------------
 echo.
 
 :: Check Node.js
@@ -65,9 +58,7 @@ if not exist "%ROOT%\ml-service\venv" (
     echo  [4/6] Creating Python virtual environment...
     cd /d "%ROOT%\ml-service"
     python -m venv venv
-    call venv\Scripts\activate.bat
-    pip install -r requirements.txt --quiet
-    call venv\Scripts\deactivate.bat
+    "%ROOT%\ml-service\venv\Scripts\pip" install -r "%ROOT%\ml-service\requirements.txt"
 ) else (
     echo  [4/6] Python environment OK
 )
@@ -84,17 +75,13 @@ if not exist "%ROOT%\backend\.env" (
 )
 
 :: Start ML Service (Python FastAPI) in new window
-start "FinoLens ML Service (port 8000)" /min cmd /c ^
-    "cd /d "%ROOT%\ml-service" && venv\Scripts\activate.bat && ^
-    python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload 2>&1"
+start "FinoLens ML Service" /min cmd /k "cd /d ""%ROOT%\ml-service"" && venv\Scripts\activate && python -m uvicorn main:app --host 0.0.0.0 --port 8000"
 
 :: Start Node Backend in new window
-start "FinoLens Backend (port 5000)" /min cmd /c ^
-    "cd /d "%ROOT%\backend" && node src/server.js 2>&1"
+start "FinoLens Backend" /min cmd /k "cd /d ""%ROOT%\backend"" && node src/server.js"
 
 :: Start React Frontend in new window
-start "FinoLens Frontend (port 3000)" /min cmd /c ^
-    "cd /d "%ROOT%\frontend" && npm run dev 2>&1"
+start "FinoLens Frontend" /min cmd /k "cd /d ""%ROOT%\frontend"" && npm run dev"
 
 :: Wait for services to boot
 echo  Waiting for services to start...
@@ -102,11 +89,11 @@ timeout /t 8 /nobreak >nul
 
 echo  [6/6] Opening FinoLens in browser...
 echo.
-echo  ─────────────────────────────────────────────────────────
-echo   ML Service  →  http://localhost:8000
-echo   Backend     →  http://localhost:5000
-echo   FinoLens    →  http://localhost:3000
-echo  ─────────────────────────────────────────────────────────
+echo  ---------------------------------------------------------
+echo   ML Service  --  http://localhost:8000
+echo   Backend     --  http://localhost:5000
+echo   FinoLens    --  http://localhost:3000
+echo  ---------------------------------------------------------
 echo.
 echo  Three minimised windows are running in the taskbar.
 echo  Close them to stop FinoLens.
