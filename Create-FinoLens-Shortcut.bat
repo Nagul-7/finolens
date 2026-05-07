@@ -15,6 +15,7 @@ if not exist "%DESKTOP%" set "DESKTOP=%USERPROFILE%\Desktop"
 
 set "SHORTCUT=%DESKTOP%\FinoLens Terminal.lnk"
 set "LAUNCHER=%ROOT%\finolens-launcher.bat"
+set "PS1=%ROOT%\finolens-start.ps1"
 set "ICON=%ROOT%\frontend\public\favicon.ico"
 
 echo Desktop path detected: %DESKTOP%
@@ -47,6 +48,7 @@ if exist "%SHORTCUT%" (
     echo  Shortcut could not be created automatically.
     echo  To launch manually, double-click:
     echo  %ROOT%\finolens-launcher.bat
+    echo  Or run directly: powershell -File "%PS1%"
     echo.
 )
 pause
