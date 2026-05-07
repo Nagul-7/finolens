@@ -77,19 +77,6 @@ router.post("/", async (req, res) => {
   return res.status(201).json({ symbol });
 });
 
-// DELETE /api/watchlist/:symbol
-router.delete("/:symbol", async (req, res) => {
-  const symbol = req.params.symbol.toUpperCase().trim();
-  try {
-    await db.query("DELETE FROM watchlist WHERE symbol = $1", [symbol]);
-  } catch {}
-
-  // Always keep memory + file in sync
-  _memWatchlist = _memWatchlist.filter((s) => s !== symbol);
-  saveWatchlistFile(_memWatchlist);
-  return res.json({ removed: symbol });
-});
-
 // GET /api/watchlist/quotes  — live quotes for all watchlist symbols
 router.get("/quotes", async (req, res) => {
   const symbols = await getWatchlistSymbols();
@@ -111,6 +98,19 @@ router.get("/quotes", async (req, res) => {
     .map((r) => r.value);
 
   return res.json(result);
+});
+
+// DELETE /api/watchlist/:symbol
+router.delete("/:symbol", async (req, res) => {
+  const symbol = req.params.symbol.toUpperCase().trim();
+  try {
+    await db.query("DELETE FROM watchlist WHERE symbol = $1", [symbol]);
+  } catch {}
+
+  // Always keep memory + file in sync
+  _memWatchlist = _memWatchlist.filter((s) => s !== symbol);
+  saveWatchlistFile(_memWatchlist);
+  return res.json({ removed: symbol });
 });
 
 module.exports = router;
