@@ -177,6 +177,8 @@ function ToolsMenu({ onSelectTool, onAddIndicator, onSettingsRequired, onClose }
 function ManualChart({ ohlcv, indicators, activeTool, drawings, selectedId, onAddDrawing, onSelect, onContextMenu }) {
   const containerRef = useRef(null)
   const svgRef       = useRef(null)
+  const chartRef     = useRef(null)
+  const seriesRef    = useRef(null)
   const [draft,   setDraft]   = useState(null)
   const [svgSize, setSvgSize] = useState({ w: 800, h: 400 })
 
@@ -218,6 +220,8 @@ function ManualChart({ ohlcv, indicators, activeTool, drawings, selectedId, onAd
         wickUpColor: '#00d4aa', wickDownColor: '#ffb4ab',
       })
       series.setData(candles)
+      chartRef.current  = chart
+      seriesRef.current = series
 
       const addLine = (values, color, dashed = false) => {
         const s = chart.addLineSeries({ color, lineWidth: 1.5, lineStyle: dashed ? 2 : 0, priceLineVisible: false, lastValueVisible: false })
@@ -265,6 +269,7 @@ function ManualChart({ ohlcv, indicators, activeTool, drawings, selectedId, onAd
       }
 
       chart.timeScale().fitContent()
+      chart.timeScale().subscribeVisibleLogicalRangeChange(() => setSvgSize(s => ({ ...s })))
 
       ro = new ResizeObserver(() => {
         if (!chart || !containerRef.current) return
@@ -277,7 +282,13 @@ function ManualChart({ ohlcv, indicators, activeTool, drawings, selectedId, onAd
       setSvgSize({ w: container.clientWidth || 800, h: container.clientHeight || 400 })
     })
 
-    return () => { active = false; if (ro) ro.disconnect(); if (chart) chart.remove() }
+    return () => {
+      active = false
+      chartRef.current  = null
+      seriesRef.current = null
+      if (ro) ro.disconnect()
+      if (chart) chart.remove()
+    }
   }, [ohlcv, indicators])
 
   // ── SVG coordinate helper ─────────────────────────────────────────────────
@@ -287,12 +298,30 @@ function ManualChart({ ohlcv, indicators, activeTool, drawings, selectedId, onAd
     return { x: e.clientX - rect.left, y: e.clientY - rect.top }
   }
 
+  // Convert SVG pixel position → chart time+price (returns null if chart not ready)
+  const pixelToChartCoords = (x, y) => {
+    const chart  = chartRef.current
+    const series = seriesRef.current
+    if (!chart || !series) return null
+    const time  = chart.timeScale().coordinateToTime(x)
+    const price = series.coordinateToPrice(y)
+    if (time == null || price == null) return null
+    return { time, price }
+  }
+
   // ── Drawing-mode mouse handlers (attached to SVG root when not in cursor mode)
   const onSvgMouseDown = e => {
     if (e.button !== 0) return
     const pos = getPos(e)
     if (activeTool === 'hline') {
-      onAddDrawing({ id: Date.now(), tool: 'hline', y: pos.y, color: DRAW_COLORS.hline })
+      const coords = pixelToChartCoords(pos.x, pos.y)
+      onAddDrawing({ id: Date.now(), tool: 'hline', y: pos.y, price: coords?.price, color: DRAW_COLORS.hline })
+      return
+    }
+    if (activeTool === 'trendline') {
+      const coords = pixelToChartCoords(pos.x, pos.y)
+      const p = { x: pos.x, y: pos.y, ...(coords || {}) }
+      setDraft({ tool: 'trendline', p1: p, p2: p })
       return
     }
     setDraft({ tool: activeTool, p1: pos, p2: pos })
@@ -300,7 +329,14 @@ function ManualChart({ ohlcv, indicators, activeTool, drawings, selectedId, onAd
   const onSvgMouseMove = e => { if (!draft) return; setDraft(d => ({ ...d, p2: getPos(e) })) }
   const onSvgMouseUp   = e => {
     if (!draft) return
-    onAddDrawing({ id: Date.now(), ...draft, p2: getPos(e), color: DRAW_COLORS[draft.tool] || '#ffffff' })
+    const pos = getPos(e)
+    if (draft.tool === 'trendline') {
+      const coords = pixelToChartCoords(pos.x, pos.y)
+      onAddDrawing({ id: Date.now(), ...draft, p2: { x: pos.x, y: pos.y, ...(coords || {}) }, color: DRAW_COLORS.trendline })
+      setDraft(null)
+      return
+    }
+    onAddDrawing({ id: Date.now(), ...draft, p2: pos, color: DRAW_COLORS[draft.tool] || '#ffffff' })
     setDraft(null)
   }
 
@@ -332,27 +368,41 @@ function ManualChart({ ohlcv, indicators, activeTool, drawings, selectedId, onAd
       onContextMenu:  e => onDrawingRightClick(e, d.id),
     } : {}
 
-    if (d.tool === 'hline') return (
-      <g key={key} {...gProps}>
-        {/* Wide invisible hit target for easy clicking */}
-        <line x1={0} y1={d.y} x2={svgSize.w} y2={d.y} stroke="transparent" strokeWidth={16} />
-        {isSel && <line x1={0} y1={d.y} x2={svgSize.w} y2={d.y} stroke="#3b9eff" strokeWidth={6} strokeOpacity={0.25} />}
-        <line x1={0} y1={d.y} x2={svgSize.w} y2={d.y} stroke={stroke} strokeWidth={sw} strokeDasharray="5 4" />
-      </g>
-    )
+    if (d.tool === 'hline') {
+      const currentY = (seriesRef.current && d.price != null)
+        ? (seriesRef.current.priceToCoordinate(d.price) ?? d.y)
+        : d.y
+      return (
+        <g key={key} {...gProps}>
+          <line x1={0} y1={currentY} x2={svgSize.w} y2={currentY} stroke="transparent" strokeWidth={16} />
+          {isSel && <line x1={0} y1={currentY} x2={svgSize.w} y2={currentY} stroke="#3b9eff" strokeWidth={6} strokeOpacity={0.25} />}
+          <line x1={0} y1={currentY} x2={svgSize.w} y2={currentY} stroke={stroke} strokeWidth={sw} strokeDasharray="5 4" />
+        </g>
+      )
+    }
 
-    if (d.tool === 'trendline' && d.p1 && d.p2) return (
-      <g key={key} {...gProps}>
-        <line x1={d.p1.x} y1={d.p1.y} x2={d.p2.x} y2={d.p2.y} stroke="transparent" strokeWidth={16} />
-        {isSel && <line x1={d.p1.x} y1={d.p1.y} x2={d.p2.x} y2={d.p2.y} stroke="#3b9eff" strokeWidth={6} strokeOpacity={0.25} />}
-        <line x1={d.p1.x} y1={d.p1.y} x2={d.p2.x} y2={d.p2.y} stroke={stroke} strokeWidth={sw} />
-        {/* Endpoint dots when selected */}
-        {isSel && <>
-          <circle cx={d.p1.x} cy={d.p1.y} r={4} fill="#3b9eff" />
-          <circle cx={d.p2.x} cy={d.p2.y} r={4} fill="#3b9eff" />
-        </>}
-      </g>
-    )
+    if (d.tool === 'trendline' && d.p1 && d.p2) {
+      let x1 = d.p1.x, y1 = d.p1.y, x2 = d.p2.x, y2 = d.p2.y
+      const chart  = chartRef.current
+      const series = seriesRef.current
+      if (chart && series && d.p1.time != null && d.p2.time != null) {
+        x1 = chart.timeScale().timeToCoordinate(d.p1.time) ?? d.p1.x
+        y1 = series.priceToCoordinate(d.p1.price)         ?? d.p1.y
+        x2 = chart.timeScale().timeToCoordinate(d.p2.time) ?? d.p2.x
+        y2 = series.priceToCoordinate(d.p2.price)         ?? d.p2.y
+      }
+      return (
+        <g key={key} {...gProps}>
+          <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth={16} />
+          {isSel && <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#3b9eff" strokeWidth={6} strokeOpacity={0.25} />}
+          <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={stroke} strokeWidth={sw} />
+          {isSel && <>
+            <circle cx={x1} cy={y1} r={4} fill="#3b9eff" />
+            <circle cx={x2} cy={y2} r={4} fill="#3b9eff" />
+          </>}
+        </g>
+      )
+    }
 
     if (d.tool === 'rectangle' && d.p1 && d.p2) {
       const rx = Math.min(d.p1.x, d.p2.x), ry = Math.min(d.p1.y, d.p2.y)
@@ -696,9 +746,9 @@ function SubPanel({ ind, ohlcv, onRemove }) {
 
 // ─── Main Charts Page ─────────────────────────────────────────────────────────
 export default function Charts() {
-  const [symbol,    setSymbol]    = useState('RELIANCE')
-  const [inputVal,  setInputVal]  = useState('RELIANCE')
-  const [timeframe, setTimeframe] = useState('3M')
+  const [symbol,    setSymbol]    = useState(() => sessionStorage.getItem('charts_symbol') || 'RELIANCE')
+  const [inputVal,  setInputVal]  = useState(() => sessionStorage.getItem('charts_symbol') || 'RELIANCE')
+  const [timeframe, setTimeframe] = useState(() => sessionStorage.getItem('charts_tf')     || '3M')
   const [ohlcv,     setOhlcv]     = useState([])
   const [loading,   setLoading]   = useState(true)
 
@@ -820,7 +870,15 @@ export default function Charts() {
 
   const applySymbol = () => {
     const s = inputVal.trim().toUpperCase()
-    if (s && s !== symbol) setSymbol(s)
+    if (s && s !== symbol) {
+      sessionStorage.setItem('charts_symbol', s)
+      setSymbol(s)
+    }
+  }
+
+  const handleTfChange = (tf) => {
+    sessionStorage.setItem('charts_tf', tf)
+    setTimeframe(tf)
   }
 
   const addIndicator    = (type, params) => setIndicators(prev => [...prev, { id: Date.now(), type, params }])
@@ -855,7 +913,7 @@ export default function Charts() {
         {/* Timeframes */}
         <div className="flex gap-1">
           {TIMEFRAMES.map(tf => (
-            <button key={tf} onClick={() => setTimeframe(tf)}
+            <button key={tf} onClick={() => handleTfChange(tf)}
               className={`px-2.5 py-1 rounded font-mono text-xs transition-colors ${timeframe===tf ? 'bg-[#2a3548] text-[#00d4aa] border border-[#3b4a44]' : 'text-[#bacac2] hover:text-[#d8e3fb] hover:bg-[#1a2540]'}`}>
               {tf}
             </button>

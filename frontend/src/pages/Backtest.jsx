@@ -14,10 +14,10 @@ const IND_OPTIONS = [
 ]
 
 const OP_OPTIONS = [
-  { value: 'below',         label: '< below' },
-  { value: 'above',         label: '> above' },
-  { value: 'crosses_above', label: '↑ crosses above' },
-  { value: 'crosses_below', label: '↓ crosses below' },
+  { value: 'below',         label: 'is below' },
+  { value: 'above',         label: 'is above' },
+  { value: 'crosses_above', label: 'crosses above' },
+  { value: 'crosses_below', label: 'crosses below' },
 ]
 
 const today = new Date().toISOString().split('T')[0]
@@ -46,9 +46,9 @@ export default function Backtest() {
   const [capital, setCapital]     = useState(100000)
 
   const [customRules, setCustomRules] = useState({
-    entryIndicator: 'rsi', entryOperator: 'crosses_above', entryValue: 30,
-    exitIndicator:  'rsi', exitOperator:  'crosses_above', exitValue:  70,
-    stopLossPct: 2, targetPct: 5,
+    entryIndicator: 'rsi', entryOperator: 'below',  entryValue: 35,
+    exitIndicator:  'rsi', exitOperator:  'above',  exitValue:  65,
+    stopLossPct: 2.5, targetPct: 5.0,
   })
 
   const [running, setRunning]     = useState(false)

@@ -170,7 +170,13 @@ export default function Watchlist() {
     }
   }
 
-  const watchItems = symbols.map(sym => quotes[sym] ?? { symbol: sym, ltp: 0, change_pct: 0, change: 0 })
+  const watchItems = symbols.map(sym => ({
+    ...(quotes[sym] ?? {}),
+    symbol: sym,
+    ltp:        quotes[sym]?.ltp        ?? 0,
+    change_pct: quotes[sym]?.change_pct ?? 0,
+    change:     quotes[sym]?.change     ?? 0,
+  }))
 
   return (
     <main className="min-h-screen pt-4 pb-4">
