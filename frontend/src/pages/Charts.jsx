@@ -1009,6 +1009,14 @@ export default function Charts() {
           </button>
         )}
 
+        {/* Saved drawings count indicator */}
+        {symbol && drawings.length > 0 && (
+          <span className="flex items-center gap-1 text-[9px] text-[#00d4aa]/70">
+            <span className="material-symbols-outlined text-[10px]">draw</span>
+            {drawings.length} drawing{drawings.length !== 1 ? 's' : ''}
+          </span>
+        )}
+
         {/* Active drawing tool badge */}
         {activeTool !== 'cursor' && (
           <div className="flex items-center gap-1 px-2 py-0.5 rounded border border-[#00d4aa]/40 bg-[#00d4aa]/10 text-[10px] text-[#00d4aa] font-bold">
@@ -1108,9 +1116,9 @@ export default function Charts() {
 
       {/* ── Save analysis toast ─────────────────────────────────────────────── */}
       {saveToast && (
-        <div className="fixed bottom-20 right-4 bg-[#111c2d] border border-[#00d4aa]/30 px-4 py-2 rounded-lg text-xs text-[#00d4aa] z-50 shadow-xl flex items-center gap-2">
-          <span className="material-symbols-outlined text-[14px]">bookmark</span>
-          {saveToast}
+        <div className="fixed top-20 right-4 z-50 bg-[#00d4aa] text-[#005643] px-4 py-2 rounded-lg text-sm font-bold shadow-xl flex items-center gap-2">
+          <span className="material-symbols-outlined text-[16px]">check_circle</span>
+          {saveToast} — Go to Watchlist to see it.
         </div>
       )}
 

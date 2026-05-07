@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { io } from 'socket.io-client'
 import { getWatchlist, getWatchlistQuotes, addToWatchlist, removeFromWatchlist, getOHLCV } from '../api/index.js'
@@ -42,30 +42,11 @@ function WatchCard({ item, onRemove, onClick, savedAnalysis }) {
         <div>
           <div className="flex items-center gap-2">
             <h3 className="font-mono font-bold text-[#d8e3fb] group-hover:text-[#00d4aa] transition-colors">{item.symbol}</h3>
-            {hasSaved && (
-              <button
-                onClick={e => {
-                  e.stopPropagation()
-                  sessionStorage.setItem('charts_symbol', item.symbol)
-                  navigate('/charts')
-                }}
-                className="flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold border border-[#00d4aa]/30 bg-[#00d4aa]/10 text-[#00d4aa] hover:bg-[#00d4aa]/20 transition-colors"
-                title={`Saved analysis — ${savedAnalysis.drawingCount} drawings`}
-              >
-                <span className="material-symbols-outlined text-[11px]">bookmark</span>
-                Saved
-              </button>
-            )}
           </div>
           <div className="flex items-center gap-2 mt-1">
             <p className="text-[9px] font-bold uppercase text-[#bacac2]">NSE:EQ</p>
             <span className="bg-[#00d4aa]/20 text-[#00d4aa] px-1.5 py-0.5 rounded text-[8px] font-bold">ALGO</span>
           </div>
-          {hasSaved && (
-            <div className="text-[9px] text-[#00d4aa]/70 mt-0.5">
-              {savedAnalysis.drawingCount} drawings · {savedAnalysis.indicators?.join(', ')} · {savedAnalysis.timeframe}
-            </div>
-          )}
         </div>
         <div className="flex items-center gap-2">
           <label className="relative inline-flex items-center cursor-pointer" title="Toggle Alerts" onClick={e => e.stopPropagation()}>
@@ -95,6 +76,28 @@ function WatchCard({ item, onRemove, onClick, savedAnalysis }) {
         </div>
         <Sparkline closes={sparkCloses} color={color} />
       </div>
+      {hasSaved && (
+        <div className="mt-1 pt-2 border-t border-[#1e293b] flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <span className="material-symbols-outlined text-[12px] text-[#00d4aa]">bookmark</span>
+            <span className="text-[9px] text-[#00d4aa] font-bold">Analysis saved</span>
+            <span className="text-[9px] text-[#4a5568]">
+              · {savedAnalysis.drawingCount || 0} drawings
+              {savedAnalysis.indicators?.length ? ` · ${savedAnalysis.indicators.join(', ')}` : ''}
+            </span>
+          </div>
+          <button
+            onClick={e => {
+              e.stopPropagation()
+              sessionStorage.setItem('charts_symbol', item.symbol)
+              navigate('/charts')
+            }}
+            className="text-[9px] font-bold text-[#00d4aa] border border-[#00d4aa]/30 px-2 py-0.5 rounded hover:bg-[#00d4aa]/10 transition-colors"
+          >
+            Open in Charts →
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -110,20 +113,30 @@ export default function Watchlist() {
   const [alerts, setAlerts]     = useState([])
   const socketRef = useRef(null)
 
-  const savedAnalyses = useMemo(() => {
-    try { return JSON.parse(localStorage.getItem('finolens_saved_analyses') || '{}') } catch { return {} }
-  }, [])
+  const [savedAnalyses, setSavedAnalyses] = useState({})
+
+  const loadSavedAnalyses = () => {
+    try {
+      const data = JSON.parse(localStorage.getItem('finolens_saved_analyses') || '{}')
+      setSavedAnalyses(data)
+    } catch {
+      setSavedAnalyses({})
+    }
+  }
 
   const loadData = async () => {
     try {
       const [wRes, qRes] = await Promise.all([getWatchlist(), getWatchlistQuotes().catch(() => ({ data: [] }))])
+      console.log('[Watchlist] raw response:', wRes.data)
       const raw = wRes.data ?? []
-      setSymbols(raw.map(item => (typeof item === 'string' ? item : item.symbol)))
+      const normalized = raw.map(item => typeof item === 'string' ? item : item.symbol).filter(Boolean)
+      console.log('[Watchlist] normalized symbols:', normalized)
+      setSymbols(normalized)
       const qMap = {}
-      for (const q of qRes.data ?? []) qMap[q.symbol] = q
+      for (const q of qRes.data ?? []) if (q.symbol) qMap[q.symbol] = q
       setQuotes(qMap)
     } catch (e) {
-      console.error('Watchlist load error', e)
+      console.error('[Watchlist] load error:', e)
     } finally {
       setLoading(false)
     }
@@ -131,6 +144,7 @@ export default function Watchlist() {
 
   useEffect(() => {
     loadData()
+    loadSavedAnalyses()
 
     const socket = io({ transports: ['websocket', 'polling'], reconnectionAttempts: 10, reconnectionDelay: 1000 })
     socketRef.current = socket
@@ -171,21 +185,29 @@ export default function Watchlist() {
       })
     })
 
-    return () => socket.disconnect()
+    window.addEventListener('focus', loadSavedAnalyses)
+    return () => {
+      socket.disconnect()
+      window.removeEventListener('focus', loadSavedAnalyses)
+    }
   }, [])
 
   const handleAdd = async () => {
     const sym = addInput.trim().toUpperCase()
     if (!sym) return
+    setAddMsg('Adding...')
     try {
-      await addToWatchlist(sym)
+      const res = await addToWatchlist(sym)
+      console.log('[handleAdd] response:', res.data)
       setAddInput('')
       setAddMsg(`${sym} added!`)
-      setTimeout(() => setAddMsg(''), 2000)
-      await loadData()
+      setTimeout(() => setAddMsg(''), 3000)
+      setTimeout(() => loadData(), 300)
     } catch (e) {
-      setAddMsg('Already in watchlist or invalid symbol')
-      setTimeout(() => setAddMsg(''), 2000)
+      console.error('[handleAdd] error:', e)
+      const msg = e?.response?.data?.error || e.message || 'Failed to add'
+      setAddMsg(`Error: ${msg}`)
+      setTimeout(() => setAddMsg(''), 4000)
     }
   }
 

@@ -8,20 +8,25 @@ const cacheService = require("../services/cacheService");
 const router = express.Router();
 const ML = axios.create({ baseURL: process.env.ML_SERVICE_URL || "http://localhost:8000", timeout: 30000 });
 
-const WATCHLIST_FILE = path.join(__dirname, "../../data/watchlist.json");
+const WATCHLIST_FILE = path.join(process.cwd(), "data", "watchlist.json");
 
 function loadWatchlistFile() {
   try {
     const dir = path.dirname(WATCHLIST_FILE);
+    console.log("[watchlist] file path:", WATCHLIST_FILE);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
+      console.log("[watchlist] created data dir");
     }
     if (!fs.existsSync(WATCHLIST_FILE)) {
       const defaults = ["RELIANCE", "HDFCBANK", "TCS", "INFY"];
       fs.writeFileSync(WATCHLIST_FILE, JSON.stringify(defaults, null, 2));
+      console.log("[watchlist] created default file");
       return defaults;
     }
-    return JSON.parse(fs.readFileSync(WATCHLIST_FILE, "utf8"));
+    const data = JSON.parse(fs.readFileSync(WATCHLIST_FILE, "utf8"));
+    console.log("[watchlist] loaded from file:", data);
+    return data;
   } catch (e) {
     console.error("[watchlist] load failed:", e.message);
     return ["RELIANCE", "HDFCBANK", "TCS", "INFY"];
@@ -45,21 +50,26 @@ async function getWatchlistSymbols() {
     const { rows } = await db.query(
       "SELECT symbol FROM watchlist ORDER BY created_at ASC"
     );
-    return rows.map((r) => r.symbol);
+    if (rows.length > 0) return rows.map((r) => r.symbol);
+    // DB returned empty — fall through to file
+    throw new Error("empty result");
   } catch {
-    return _memWatchlist;
+    // Read fresh from file every time so changes are always reflected
+    return loadWatchlistFile();
   }
 }
 
 // GET /api/watchlist
 router.get("/", async (req, res) => {
   const symbols = await getWatchlistSymbols();
+  console.log("[watchlist GET]", symbols);
   return res.json(symbols);
 });
 
 // POST /api/watchlist  { symbol }
 router.post("/", async (req, res) => {
   const symbol = (req.body.symbol || "").toUpperCase().trim();
+  console.log("[watchlist POST] adding:", symbol);
   if (!symbol) return res.status(400).json({ error: "symbol is required" });
 
   try {
@@ -67,12 +77,18 @@ router.post("/", async (req, res) => {
       "INSERT INTO watchlist (symbol) VALUES ($1) ON CONFLICT (symbol) DO NOTHING",
       [symbol]
     );
-  } catch {}
+    console.log("[watchlist POST] DB insert ok");
+  } catch (e) {
+    console.log("[watchlist POST] DB failed:", e.message, "— using file fallback");
+  }
 
   // Always keep memory + file in sync regardless of DB outcome
   if (!_memWatchlist.includes(symbol)) {
     _memWatchlist.push(symbol);
     saveWatchlistFile(_memWatchlist);
+    console.log("[watchlist POST] saved to file:", _memWatchlist);
+  } else {
+    console.log("[watchlist POST] already exists:", symbol);
   }
   return res.status(201).json({ symbol });
 });
