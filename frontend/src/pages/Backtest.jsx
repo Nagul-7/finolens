@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from 'recharts'
 import { runBacktest } from '../api/index.js'
 
@@ -9,9 +10,24 @@ const STRATEGIES = [
 ]
 
 const IND_OPTIONS = [
-  { value: 'rsi',  label: 'RSI' },
-  { value: 'macd', label: 'MACD Histogram' },
+  { value: 'rsi',          label: 'RSI (0-100)' },
+  { value: 'macd',         label: 'MACD Histogram' },
+  { value: 'ema_cross',    label: 'EMA9 vs EMA21 diff' },
+  { value: 'stoch_k',      label: 'Stochastic %K' },
+  { value: 'bb_position',  label: 'BB Position (0-100%)' },
+  { value: 'volume_ratio', label: 'Volume Ratio (vs avg)' },
+  { value: 'price_vs_ema', label: 'Price vs EMA20 (%)' },
 ]
+
+const IND_HINTS = {
+  rsi:          'Typical: 30 (oversold) or 70 (overbought)',
+  macd:         'Typical: 0 (above=bullish, below=bearish)',
+  ema_cross:    'Typical: 0 (EMA9 above EMA21 = bullish)',
+  stoch_k:      'Typical: 20 (oversold) or 80 (overbought)',
+  bb_position:  'Typical: 25 (lower band) or 75 (upper band)',
+  volume_ratio: 'Typical: 1.5 (50% above average volume)',
+  price_vs_ema: 'Typical: 0 (price crossing EMA20)',
+}
 
 const OP_OPTIONS = [
   { value: 'below',         label: 'is below' },
@@ -39,11 +55,14 @@ function downloadCSV(tradeLog, symbol) {
 }
 
 export default function Backtest() {
+  const location = useLocation()
+
   const [symbol, setSymbol]       = useState('RELIANCE')
   const [strategy, setStrategy]   = useState('rsi')
   const [from, setFrom]           = useState(sixMonthsAgo)
   const [to, setTo]               = useState(today)
   const [capital, setCapital]     = useState(100000)
+  const [fromAlgo, setFromAlgo]   = useState(null)
 
   const [customRules, setCustomRules] = useState({
     entryIndicator: 'rsi', entryOperator: 'below',  entryValue: 35,
@@ -54,6 +73,16 @@ export default function Backtest() {
   const [running, setRunning]     = useState(false)
   const [result, setResult]       = useState(null)
   const [error, setError]         = useState(null)
+
+  useEffect(() => {
+    const s = location.state
+    if (!s) return
+    if (s.symbol)      setSymbol(s.symbol)
+    if (s.strategy)    setStrategy(s.strategy)
+    if (s.capital)     setCapital(s.capital)
+    if (s.customRules) setCustomRules(s.customRules)
+    if (s.strategyName) setFromAlgo(s.strategyName)
+  }, [location.state])
 
   const handleRun = async () => {
     setRunning(true); setError(null); setResult(null)
@@ -92,6 +121,14 @@ export default function Backtest() {
           </button>
         )}
       </div>
+
+      {/* Algo banner */}
+      {fromAlgo && (
+        <div className="px-4 py-2 bg-[#00d4aa]/10 border border-[#00d4aa]/30 rounded text-[#00d4aa] text-xs flex items-center justify-between">
+          <span>⚡ Backtesting strategy: <strong>{fromAlgo}</strong> — parameters pre-filled from Algo tab</span>
+          <button onClick={() => setFromAlgo(null)} className="text-[#00d4aa]/60 hover:text-[#00d4aa] ml-4 text-base leading-none">×</button>
+        </div>
+      )}
 
       {/* Parameters */}
       <div className="bg-[#1f2a3c] border border-[#3b4a44] rounded p-4 flex flex-col md:flex-row items-start md:items-center gap-4 flex-wrap">
@@ -148,8 +185,11 @@ export default function Backtest() {
                   className="bg-[#1f2a3c] border border-[#3b4a44] rounded py-1 px-2 text-[#d8e3fb] font-mono text-xs focus:border-[#00d4aa] outline-none">
                   {OP_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
-                <input type="number" value={customRules.entryValue} onChange={e => setCustomRules(r => ({ ...r, entryValue: e.target.value }))}
-                  className="w-20 bg-[#1f2a3c] border border-[#3b4a44] rounded py-1 px-2 text-[#d8e3fb] font-mono text-xs focus:border-[#00d4aa] outline-none" />
+                <div className="flex flex-col gap-1">
+                  <input type="number" value={customRules.entryValue} onChange={e => setCustomRules(r => ({ ...r, entryValue: e.target.value }))}
+                    className="w-20 bg-[#1f2a3c] border border-[#3b4a44] rounded py-1 px-2 text-[#d8e3fb] font-mono text-xs focus:border-[#00d4aa] outline-none" />
+                  <span className="text-[9px] text-[#4a5568]">{IND_HINTS[customRules.entryIndicator]}</span>
+                </div>
               </div>
             </div>
             <div className="flex flex-col gap-2">
@@ -163,8 +203,11 @@ export default function Backtest() {
                   className="bg-[#1f2a3c] border border-[#3b4a44] rounded py-1 px-2 text-[#d8e3fb] font-mono text-xs focus:border-[#00d4aa] outline-none">
                   {OP_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
-                <input type="number" value={customRules.exitValue} onChange={e => setCustomRules(r => ({ ...r, exitValue: e.target.value }))}
-                  className="w-20 bg-[#1f2a3c] border border-[#3b4a44] rounded py-1 px-2 text-[#d8e3fb] font-mono text-xs focus:border-[#00d4aa] outline-none" />
+                <div className="flex flex-col gap-1">
+                  <input type="number" value={customRules.exitValue} onChange={e => setCustomRules(r => ({ ...r, exitValue: e.target.value }))}
+                    className="w-20 bg-[#1f2a3c] border border-[#3b4a44] rounded py-1 px-2 text-[#d8e3fb] font-mono text-xs focus:border-[#00d4aa] outline-none" />
+                  <span className="text-[9px] text-[#4a5568]">{IND_HINTS[customRules.exitIndicator]}</span>
+                </div>
               </div>
             </div>
           </div>

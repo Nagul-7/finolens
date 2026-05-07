@@ -56,20 +56,62 @@ function computeMACDHist(closes) {
 
 function round2(n) { return Math.round(n * 100) / 100; }
 
-function runCustomBacktest(bars, rules, capital) {
+function runCustomBacktest(bars, rules, capital, symbol = "NSE") {
   if (!bars || bars.length < 50) {
     return { win_rate: 0, total_trades: 0, avg_pnl: 0, max_drawdown: 0, sharpe_ratio: 0, equity_curve: [], trade_log: [] };
   }
 
-  const closes = bars.map((b) => parseFloat(b.close));
-  const dates  = bars.map((b) => (b.timestamp || b.date || "").substring(0, 10));
+  const closes  = bars.map((b) => parseFloat(b.close));
+  const dates   = bars.map((b) => (b.timestamp || b.date || "").substring(0, 10));
+  const volumes = bars.map((b) => parseFloat(b.volume || 0));
 
   const rsiArr  = computeRSI(closes);
   const histArr = computeMACDHist(closes);
 
+  // EMA cross: EMA9 − EMA21
+  const ema9  = computeEMA(closes, 9);
+  const ema21 = computeEMA(closes, 21);
+  const emaCrossArr = closes.map((_, i) => ema9[i] - ema21[i]);
+
+  // Stochastic %K
+  const kPeriod = 14;
+  const stochKArr = closes.map((_, i) => {
+    if (i < kPeriod - 1) return null;
+    const slice = closes.slice(i - kPeriod + 1, i + 1);
+    const hi = Math.max(...slice), lo = Math.min(...slice);
+    return hi === lo ? 50 : (closes[i] - lo) / (hi - lo) * 100;
+  });
+
+  // Bollinger Band position (0–100%)
+  const bbPeriod = 20;
+  const bbPosArr = closes.map((_, i) => {
+    if (i < bbPeriod - 1) return null;
+    const slice = closes.slice(i - bbPeriod + 1, i + 1);
+    const mean  = slice.reduce((a, b) => a + b, 0) / bbPeriod;
+    const std   = Math.sqrt(slice.reduce((s, v) => s + (v - mean) ** 2, 0) / bbPeriod);
+    const upper = mean + 2 * std, lower = mean - 2 * std;
+    return upper === lower ? 50 : (closes[i] - lower) / (upper - lower) * 100;
+  });
+
+  // Volume ratio vs 20-day average
+  const volRatioArr = volumes.map((v, i) => {
+    if (i < 20) return 1;
+    const avg = volumes.slice(i - 20, i).reduce((a, b) => a + b, 0) / 20;
+    return avg > 0 ? v / avg : 1;
+  });
+
+  // Price vs EMA20 percentage difference
+  const ema20 = computeEMA(closes, 20);
+  const priceVsEmaArr = closes.map((c, i) => ema20[i] > 0 ? (c - ema20[i]) / ema20[i] * 100 : 0);
+
   function getVal(indicator, i) {
-    if (indicator === "rsi")  return rsiArr[i];
-    if (indicator === "macd") return histArr[i];
+    if (indicator === "rsi")          return rsiArr[i];
+    if (indicator === "macd")         return histArr[i];
+    if (indicator === "ema_cross")    return emaCrossArr[i];
+    if (indicator === "stoch_k")      return stochKArr[i];
+    if (indicator === "bb_position")  return bbPosArr[i];
+    if (indicator === "volume_ratio") return volRatioArr[i];
+    if (indicator === "price_vs_ema") return priceVsEmaArr[i];
     return null;
   }
 
@@ -110,7 +152,7 @@ function runCustomBacktest(bars, rules, capital) {
       const exitByTP   = pnlPct >= tpPct;
       if (exitByRule || exitBySL || exitByTP || i === closes.length - 1) {
         const pnl = round2((closes[i] - position.entry) * position.lotSize);
-        trades.push({ dt: position.date + " → " + dates[i], symbol: "NSE", type: "LONG",
+        trades.push({ dt: position.date + " → " + dates[i], symbol, type: "LONG",
           entry: round2(position.entry), exit: round2(closes[i]), pnl, positive: pnl > 0 });
         equity += pnl;
         position = null;
@@ -142,7 +184,7 @@ function runCustomBacktest(bars, rules, capital) {
     trade_log: trades.slice(-20).reverse() };
 }
 
-function runBacktest(bars, strategyName, capital) {
+function runBacktest(bars, strategyName, capital, symbol = "NSE") {
   if (!bars || bars.length < 50) {
     return { win_rate: 0, total_trades: 0, avg_pnl: 0, max_drawdown: 0, sharpe_ratio: 0, equity_curve: [], trade_log: [] };
   }
@@ -199,7 +241,7 @@ function runBacktest(bars, strategyName, capital) {
         const pnl = round2((closes[i] - position.entry) * position.lotSize);
         trades.push({
           dt: position.date + " → " + dates[i],
-          symbol: "NSE",
+          symbol,
           type: "LONG",
           entry: round2(position.entry),
           exit: round2(closes[i]),
@@ -273,8 +315,8 @@ router.post("/run", async (req, res) => {
     }
 
     const result = strategy === "custom" && custom_rules
-      ? runCustomBacktest(bars, custom_rules, Number(capital))
-      : runBacktest(bars, strategy, Number(capital));
+      ? runCustomBacktest(bars, custom_rules, Number(capital), sym)
+      : runBacktest(bars, strategy, Number(capital), sym);
     return res.json(result);
   } catch (err) {
     return res.status(502).json({ error: "Backtest failed.", detail: err.message });

@@ -440,7 +440,24 @@ export default function Algo() {
             </div>
           </div>
           <div className="p-4 border-t border-[#2a3548] bg-[#111c2d] flex justify-end gap-3">
-            <button onClick={() => navigate('/backtest')}
+            <button onClick={() => navigate('/backtest', {
+              state: {
+                symbol: universe === 'Nifty 50' ? 'NIFTY' : universe,
+                strategy: 'custom',
+                customRules: {
+                  entryIndicator: 'rsi',
+                  entryOperator:  'below',
+                  entryValue:     35,
+                  exitIndicator:  'rsi',
+                  exitOperator:   'above',
+                  exitValue:      65,
+                  stopLossPct:    parseFloat(slPct)    || 2.5,
+                  targetPct:      parseFloat(targetPct) || 5.0,
+                },
+                strategyName: stratName,
+                capital:      parseInt(maxAlloc) || 500000,
+              }
+            })}
               className="px-6 py-2 rounded text-sm font-semibold border border-[#2a3548] text-[#bacac2] hover:text-[#d8e3fb] hover:bg-[#152031] transition-colors">
               BACKTEST
             </button>
