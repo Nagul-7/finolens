@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { io } from 'socket.io-client'
 import { getWatchlist, getWatchlistQuotes, addToWatchlist, removeFromWatchlist, getOHLCV } from '../api/index.js'
@@ -16,11 +16,13 @@ function Sparkline({ closes = [], color = '#00d4aa' }) {
   )
 }
 
-function WatchCard({ item, onRemove, onClick }) {
+function WatchCard({ item, onRemove, onClick, savedAnalysis }) {
+  const navigate = useNavigate()
   const [alertOn, setAlertOn] = useState(true)
   const [sparkCloses, setSparkCloses] = useState([])
   const pos = item.change_pct >= 0
   const color = pos ? '#00d4aa' : '#ffb4ab'
+  const hasSaved = !!savedAnalysis
 
   useEffect(() => {
     getOHLCV(item.symbol, '1d')
@@ -38,11 +40,32 @@ function WatchCard({ item, onRemove, onClick }) {
     >
       <div className="flex justify-between items-start">
         <div>
-          <h3 className="font-mono font-bold text-[#d8e3fb] group-hover:text-[#00d4aa] transition-colors">{item.symbol}</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="font-mono font-bold text-[#d8e3fb] group-hover:text-[#00d4aa] transition-colors">{item.symbol}</h3>
+            {hasSaved && (
+              <button
+                onClick={e => {
+                  e.stopPropagation()
+                  sessionStorage.setItem('charts_symbol', item.symbol)
+                  navigate('/charts')
+                }}
+                className="flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold border border-[#00d4aa]/30 bg-[#00d4aa]/10 text-[#00d4aa] hover:bg-[#00d4aa]/20 transition-colors"
+                title={`Saved analysis — ${savedAnalysis.drawingCount} drawings`}
+              >
+                <span className="material-symbols-outlined text-[11px]">bookmark</span>
+                Saved
+              </button>
+            )}
+          </div>
           <div className="flex items-center gap-2 mt-1">
             <p className="text-[9px] font-bold uppercase text-[#bacac2]">NSE:EQ</p>
             <span className="bg-[#00d4aa]/20 text-[#00d4aa] px-1.5 py-0.5 rounded text-[8px] font-bold">ALGO</span>
           </div>
+          {hasSaved && (
+            <div className="text-[9px] text-[#00d4aa]/70 mt-0.5">
+              {savedAnalysis.drawingCount} drawings · {savedAnalysis.indicators?.join(', ')} · {savedAnalysis.timeframe}
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <label className="relative inline-flex items-center cursor-pointer" title="Toggle Alerts" onClick={e => e.stopPropagation()}>
@@ -83,8 +106,13 @@ export default function Watchlist() {
   const [loading, setLoading]   = useState(true)
   const [addInput, setAddInput] = useState('')
   const [addMsg, setAddMsg]     = useState('')
+  const [wSearch, setWSearch]   = useState('')
   const [alerts, setAlerts]     = useState([])
   const socketRef = useRef(null)
+
+  const savedAnalyses = useMemo(() => {
+    try { return JSON.parse(localStorage.getItem('finolens_saved_analyses') || '{}') } catch { return {} }
+  }, [])
 
   const loadData = async () => {
     try {
@@ -178,6 +206,10 @@ export default function Watchlist() {
     change:     quotes[sym]?.change     ?? 0,
   }))
 
+  const filteredItems = wSearch
+    ? watchItems.filter(i => i.symbol.includes(wSearch.toUpperCase()))
+    : watchItems
+
   return (
     <main className="min-h-screen pt-4 pb-4">
       <div className="px-6 grid grid-cols-1 xl:grid-cols-12 gap-4 flex-grow">
@@ -185,6 +217,22 @@ export default function Watchlist() {
         <div className="xl:col-span-8 flex flex-col gap-6">
           <div className="flex items-center justify-between border-b border-[#3b4a44] pb-3">
             <h1 className="text-2xl font-semibold text-[#d8e3fb]">Active Watchlist</h1>
+          </div>
+
+          {/* Search watchlist */}
+          <div className="flex items-center gap-2 bg-[#111c2d] border border-[#2a3548] rounded-lg px-3 py-2 focus-within:border-[#00d4aa] transition-colors max-w-xs">
+            <span className="material-symbols-outlined text-[#bacac2] text-[16px] shrink-0">search</span>
+            <input
+              value={wSearch}
+              onChange={e => setWSearch(e.target.value.toUpperCase())}
+              placeholder="Filter watchlist…"
+              className="flex-1 bg-transparent outline-none text-[#d8e3fb] text-sm placeholder:text-[#bacac2] font-mono uppercase placeholder:normal-case"
+            />
+            {wSearch && (
+              <button onClick={() => setWSearch('')} className="text-[#bacac2] hover:text-[#d8e3fb]">
+                <span className="material-symbols-outlined text-[14px]">close</span>
+              </button>
+            )}
           </div>
 
           {/* Add symbol */}
@@ -207,12 +255,13 @@ export default function Watchlist() {
               [...Array(4)].map((_, i) => <div key={i} className="h-32 bg-[#111827] border border-[#1e293b] rounded-xl animate-pulse" />)
             ) : (
               <>
-                {watchItems.map(item => (
+                {filteredItems.map(item => (
                   <WatchCard
                     key={item.symbol}
                     item={item}
                     onRemove={handleRemove}
                     onClick={() => navigate(`/intelligence/${item.symbol}`)}
+                    savedAnalysis={savedAnalyses[item.symbol]}
                   />
                 ))}
                 <div

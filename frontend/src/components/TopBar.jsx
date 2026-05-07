@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { getIndex } from '../api/index.js'
 
 function isMarketOpen() {
@@ -11,9 +12,19 @@ function isMarketOpen() {
 }
 
 export default function TopBar() {
-  const [nifty, setNifty]     = useState(null)
+  const navigate = useNavigate()
+  const [nifty, setNifty]         = useState(null)
   const [banknifty, setBanknifty] = useState(null)
-  const [open, setOpen]       = useState(isMarketOpen())
+  const [open, setOpen]           = useState(isMarketOpen())
+  const [globalSearch, setGlobalSearch] = useState('')
+
+  const handleGlobalSearch = (val) => {
+    const sym = val.trim().toUpperCase()
+    if (sym.length >= 2) {
+      navigate(`/intelligence/${sym}`)
+      setGlobalSearch('')
+    }
+  }
 
   useEffect(() => {
     const load = async () => {
@@ -55,6 +66,18 @@ export default function TopBar() {
           </div>
         </div>
       </div>
+      {/* Global search */}
+      <div className="hidden md:flex items-center gap-1.5 bg-[#111c2d] border border-[#2a3548] rounded-lg px-2 py-1 focus-within:border-[#00d4aa] transition-colors w-36">
+        <span className="material-symbols-outlined text-[#4a5568] text-[14px]">search</span>
+        <input
+          value={globalSearch}
+          onChange={e => setGlobalSearch(e.target.value.toUpperCase())}
+          onKeyDown={e => { if (e.key === 'Enter') handleGlobalSearch(globalSearch) }}
+          placeholder="Quick search…"
+          className="bg-transparent outline-none text-[#d8e3fb] text-[11px] font-mono w-full uppercase placeholder:normal-case placeholder:text-[#4a5568]"
+        />
+      </div>
+
       <div className="flex items-center gap-2">
         <div className={`hidden md:flex items-center gap-1.5 px-2 py-1 rounded border ${open ? 'bg-[#00d4aa]/10 border-[#00d4aa]/20' : 'bg-[#1e293b] border-[#2a3548]'}`}>
           <div className={`w-2 h-2 rounded-full ${open ? 'bg-[#00d4aa] animate-pulse-slow' : 'bg-slate-500'}`} />

@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom'
 
 const navItems = [
   { to: '/',            label: 'Home',        icon: 'home' },
-  { to: '/intelligence/RELIANCE', label: 'Intelligence', icon: 'insights' },
+  { to: '/intelligence', label: 'Intelligence', icon: 'insights' },
   { to: '/options',     label: 'Options',     icon: 'legend_toggle' },
   { to: '/charts',      label: 'Charts',      icon: 'candlestick_chart' },
   { to: '/backtest',    label: 'Backtest',    icon: 'history_edu' },

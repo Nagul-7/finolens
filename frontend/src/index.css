@@ -116,3 +116,6 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #3b4a44; border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: #85948d; }
+
+.hide-scrollbar::-webkit-scrollbar { display: none; }
+.hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }

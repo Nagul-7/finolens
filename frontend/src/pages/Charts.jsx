@@ -746,8 +746,8 @@ function SubPanel({ ind, ohlcv, onRemove }) {
 
 // ─── Main Charts Page ─────────────────────────────────────────────────────────
 export default function Charts() {
-  const [symbol,    setSymbol]    = useState(() => sessionStorage.getItem('charts_symbol') || 'RELIANCE')
-  const [inputVal,  setInputVal]  = useState(() => sessionStorage.getItem('charts_symbol') || 'RELIANCE')
+  const [symbol,    setSymbol]    = useState(() => sessionStorage.getItem('charts_symbol') || '')
+  const [inputVal,  setInputVal]  = useState(() => sessionStorage.getItem('charts_symbol') || '')
   const [timeframe, setTimeframe] = useState(() => sessionStorage.getItem('charts_tf')     || '3M')
   const [ohlcv,     setOhlcv]     = useState([])
   const [loading,   setLoading]   = useState(true)
@@ -766,6 +766,7 @@ export default function Charts() {
   const [selectedId, setSelectedId] = useState(null)
   const [contextMenu, setContextMenu] = useState(null)   // { x, y, drawingId }
   const [pendingColorId, setPendingColorId] = useState(null)
+  const [saveToast, setSaveToast] = useState('')
   const colorInputRef = useRef(null)
 
   // Stable refs so keyboard handler callbacks stay stable across renders
@@ -774,12 +775,33 @@ export default function Charts() {
   useEffect(() => { drawingsRef.current   = drawings   }, [drawings])
   useEffect(() => { selectedIdRef.current = selectedId }, [selectedId])
 
+  // ── Drawings persistence ──────────────────────────────────────────────────
+  const saveDrawingsForSymbol = useCallback((sym, list) => {
+    if (!sym) return
+    try { localStorage.setItem(`finolens_drawings_${sym}`, JSON.stringify(list)) } catch {}
+  }, [])
+
+  // Load saved drawings whenever the active symbol changes
+  useEffect(() => {
+    if (!symbol) { setDrawings([]); return }
+    try {
+      const saved = localStorage.getItem(`finolens_drawings_${symbol}`)
+      setDrawings(saved ? JSON.parse(saved) : [])
+    } catch { setDrawings([]) }
+    setHistory([])
+    setSelectedId(null)
+  }, [symbol])
+
   // ── Drawing mutations ─────────────────────────────────────────────────────
   const handleAddDrawing = useCallback(drawing => {
     setHistory(h => pushHistory(h, drawingsRef.current))
-    setDrawings(d => addDrawing(d, drawing))
+    setDrawings(d => {
+      const updated = addDrawing(d, drawing)
+      saveDrawingsForSymbol(symbol, updated)
+      return updated
+    })
     setSelectedId(null)
-  }, [])
+  }, [symbol, saveDrawingsForSymbol])
 
   const handleUndo = useCallback(() => {
     setHistory(h => {
@@ -793,16 +815,21 @@ export default function Charts() {
 
   const handleDeleteDrawing = useCallback(id => {
     setHistory(h => pushHistory(h, drawingsRef.current))
-    setDrawings(d => removeDrawing(d, id))
+    setDrawings(d => {
+      const updated = removeDrawing(d, id)
+      saveDrawingsForSymbol(symbol, updated)
+      return updated
+    })
     setSelectedId(null)
-  }, [])
+  }, [symbol, saveDrawingsForSymbol])
 
   const handleClearAll = useCallback(() => {
     if (drawingsRef.current.length === 0) return
     setHistory(h => pushHistory(h, drawingsRef.current))
     setDrawings([])
+    saveDrawingsForSymbol(symbol, [])
     setSelectedId(null)
-  }, [])
+  }, [symbol, saveDrawingsForSymbol])
 
   // ── Keyboard shortcuts (stable handler via refs) ──────────────────────────
   useEffect(() => {
@@ -845,6 +872,7 @@ export default function Charts() {
   const [brokerStatus, setBrokerStatus] = useState({ broker: 'yfinance', live_trading_available: false })
 
   const load = useCallback(async () => {
+    if (!symbol) { setLoading(false); setOhlcv([]); return }
     setLoading(true)
     try {
       const res = await getOHLCV(symbol, TF_MAP[timeframe])
@@ -874,6 +902,23 @@ export default function Charts() {
       sessionStorage.setItem('charts_symbol', s)
       setSymbol(s)
     }
+  }
+
+  const saveAnalysis = () => {
+    if (!symbol) return
+    saveDrawingsForSymbol(symbol, drawings)
+    try {
+      const saved = JSON.parse(localStorage.getItem('finolens_saved_analyses') || '{}')
+      saved[symbol] = {
+        savedAt: new Date().toISOString(),
+        drawingCount: drawings.length,
+        indicators: indicators.map(i => i.type),
+        timeframe,
+      }
+      localStorage.setItem('finolens_saved_analyses', JSON.stringify(saved))
+    } catch {}
+    setSaveToast(`Analysis saved for ${symbol}`)
+    setTimeout(() => setSaveToast(''), 3000)
   }
 
   const handleTfChange = (tf) => {
@@ -953,6 +998,17 @@ export default function Charts() {
           </button>
         )}
 
+        {/* Save Analysis */}
+        {symbol && (
+          <button
+            onClick={saveAnalysis}
+            className="flex items-center gap-1.5 px-3 py-1 rounded text-xs font-bold border border-[#00d4aa]/40 text-[#00d4aa] bg-[#00d4aa]/10 hover:bg-[#00d4aa]/20 transition-colors"
+          >
+            <span className="material-symbols-outlined text-[13px]">bookmark</span>
+            Save Analysis
+          </button>
+        )}
+
         {/* Active drawing tool badge */}
         {activeTool !== 'cursor' && (
           <div className="flex items-center gap-1 px-2 py-0.5 rounded border border-[#00d4aa]/40 bg-[#00d4aa]/10 text-[10px] text-[#00d4aa] font-bold">
@@ -988,19 +1044,25 @@ export default function Charts() {
 
       {/* ── Chart ───────────────────────────────────────────────────────────── */}
       <div className="flex-1 relative min-h-0">
-        {loading
-          ? <div className="absolute inset-0 m-2 animate-pulse bg-[#1f2a3c] rounded" />
-          : <ManualChart
-              ohlcv={ohlcv}
-              indicators={indicators}
-              activeTool={activeTool}
-              drawings={drawings}
-              selectedId={selectedId}
-              onAddDrawing={handleAddDrawing}
-              onSelect={setSelectedId}
-              onContextMenu={(x, y, id) => setContextMenu({ x, y, drawingId: id })}
-            />
-        }
+        {!symbol ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[#081425]">
+            <span className="material-symbols-outlined text-[56px] text-[#2a3548]">candlestick_chart</span>
+            <p className="text-[#bacac2] text-sm">Enter a symbol above or select from Home</p>
+          </div>
+        ) : loading ? (
+          <div className="absolute inset-0 m-2 animate-pulse bg-[#1f2a3c] rounded" />
+        ) : (
+          <ManualChart
+            ohlcv={ohlcv}
+            indicators={indicators}
+            activeTool={activeTool}
+            drawings={drawings}
+            selectedId={selectedId}
+            onAddDrawing={handleAddDrawing}
+            onSelect={setSelectedId}
+            onContextMenu={(x, y, id) => setContextMenu({ x, y, drawingId: id })}
+          />
+        )}
       </div>
 
       {/* ── Sub-panels: RSI / MACD / Stochastic ─────────────────────────────── */}
@@ -1043,6 +1105,14 @@ export default function Charts() {
           setPendingColorId(null)
         }}
       />
+
+      {/* ── Save analysis toast ─────────────────────────────────────────────── */}
+      {saveToast && (
+        <div className="fixed bottom-20 right-4 bg-[#111c2d] border border-[#00d4aa]/30 px-4 py-2 rounded-lg text-xs text-[#00d4aa] z-50 shadow-xl flex items-center gap-2">
+          <span className="material-symbols-outlined text-[14px]">bookmark</span>
+          {saveToast}
+        </div>
+      )}
 
       {/* ── Indicator Settings Modal ─────────────────────────────────────────── */}
       {pendingIndType && (

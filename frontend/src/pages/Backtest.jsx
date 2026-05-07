@@ -57,7 +57,7 @@ function downloadCSV(tradeLog, symbol) {
 export default function Backtest() {
   const location = useLocation()
 
-  const [symbol, setSymbol]       = useState('RELIANCE')
+  const [symbol, setSymbol]       = useState(() => sessionStorage.getItem('backtest_symbol') || '')
   const [strategy, setStrategy]   = useState('rsi')
   const [from, setFrom]           = useState(sixMonthsAgo)
   const [to, setTo]               = useState(today)
@@ -84,7 +84,16 @@ export default function Backtest() {
     if (s.strategyName) setFromAlgo(s.strategyName)
   }, [location.state])
 
+  const handleSymbolChange = (val) => {
+    setSymbol(val)
+    sessionStorage.setItem('backtest_symbol', val)
+  }
+
   const handleRun = async () => {
+    if (!symbol.trim()) {
+      setError('Please enter a stock symbol first.')
+      return
+    }
     setRunning(true); setError(null); setResult(null)
     try {
       const payload = { symbol: symbol.toUpperCase(), strategy, from, to, capital: +capital }
@@ -136,8 +145,9 @@ export default function Backtest() {
           <label className="text-[11px] font-bold uppercase text-[#bacac2] whitespace-nowrap">SYMBOL</label>
           <input
             value={symbol}
-            onChange={e => setSymbol(e.target.value.toUpperCase())}
-            className="w-28 bg-[#081425] border border-[#3b4a44] rounded py-1.5 px-3 text-[#d8e3fb] font-mono text-sm focus:border-[#00d4aa] outline-none uppercase"
+            onChange={e => handleSymbolChange(e.target.value.toUpperCase())}
+            placeholder="e.g. RELIANCE"
+            className="w-28 bg-[#081425] border border-[#3b4a44] rounded py-1.5 px-3 text-[#d8e3fb] font-mono text-sm focus:border-[#00d4aa] outline-none uppercase placeholder:text-[#3b4a44] placeholder:normal-case"
           />
         </div>
 

@@ -1,5 +1,23 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+
+const NIFTY50_STOCKS = [
+  'RELIANCE','TCS','HDFCBANK','INFY','ICICIBANK',
+  'HINDUNILVR','SBIN','BHARTIARTL','ITC','KOTAKBANK',
+  'LT','AXISBANK','ASIANPAINT','MARUTI','SUNPHARMA',
+  'TITAN','BAJFINANCE','WIPRO','ULTRACEMCO','NTPC',
+  'POWERGRID','ONGC','NESTLEIND','COALINDIA','JSWSTEEL',
+  'TATAMOTORS','ADANIENT','ADANIPORTS','HINDALCO','GRASIM',
+  'TATASTEEL','TECHM','HCLTECH','DRREDDY','DIVISLAB',
+  'CIPLA','APOLLOHOSP','BAJAJFINSV','SBILIFE','HDFCLIFE',
+  'EICHERMOT','HEROMOTOCO','BPCL','TATACONSUM','BRITANNIA',
+  'UPL','SHREECEM','INDUSINDBK','M&M','LTM',
+]
+
+const BANKNIFTY_STOCKS = [
+  'HDFCBANK','ICICIBANK','KOTAKBANK','AXISBANK','SBIN',
+  'INDUSINDBK','BANDHANBNK','FEDERALBNK','IDFCFIRSTB','AUBANK',
+]
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip,
   ReferenceLine, ComposedChart, Bar,
@@ -195,9 +213,16 @@ function MainChart({ ohlcv, interval, emaPeriod, showBB, showVWAP, showST, overl
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function Intelligence() {
-  const { symbol = 'RELIANCE' } = useParams()
+  const { symbol } = useParams()
   const navigate = useNavigate()
   const [activeInterval, setActiveInterval] = useState('1D')
+  const [searchVal, setSearchVal] = useState(symbol || '')
+  const [universe, setUniverse] = useState('NIFTY50')
+
+  const applySearch = () => {
+    const s = searchVal.trim().toUpperCase()
+    if (s) navigate(`/intelligence/${s}`)
+  }
 
   const [quote,    setQuote]    = useState(null)
   const [callData, setCallData] = useState(null)
@@ -216,6 +241,7 @@ export default function Intelligence() {
   const toggleOverlay = key => setOverlays(p => ({ ...p, [key]: !p[key] }))
 
   const load = useCallback(async () => {
+    if (!symbol) { setLoading(false); return }
     setLoading(true); setError(null)
     try {
       const [qRes, cRes, sRes, oRes] = await Promise.all([
@@ -288,11 +314,37 @@ export default function Intelligence() {
     { label: 'BB Position',     score: s.bb_score     ?? 50 },
   ]
 
+  if (!symbol) return (
+    <main className="min-h-screen flex flex-col items-center justify-center gap-4 bg-[#081425]">
+      <span className="material-symbols-outlined text-[64px] text-[#2a3548]">insights</span>
+      <p className="text-[#bacac2] text-sm">Select a stock from Home to view intelligence</p>
+      <button
+        onClick={() => navigate('/')}
+        className="px-5 py-2 bg-[#00d4aa] text-[#005643] rounded text-sm font-bold hover:bg-[#46f1c5] transition-colors">
+        Go to Home
+      </button>
+    </main>
+  )
+
   return (
     <main className="w-full">
       {/* Header */}
       <div className="px-4 py-3 md:px-6 bg-[#081425] border-b border-[#1e293b] flex flex-col md:flex-row md:items-end justify-between gap-3">
         <div>
+          {/* Search bar */}
+          <div className="flex items-center gap-2 bg-[#111c2d] border border-[#2a3548] rounded-lg px-3 py-1.5 w-56 focus-within:border-[#00d4aa] transition-colors mb-2">
+            <span className="material-symbols-outlined text-[#bacac2] text-[16px]">search</span>
+            <input
+              value={searchVal}
+              onChange={e => setSearchVal(e.target.value.toUpperCase())}
+              onKeyDown={e => e.key === 'Enter' && applySearch()}
+              placeholder="Search symbol…"
+              className="bg-transparent outline-none text-[#d8e3fb] text-sm font-mono w-full uppercase placeholder:normal-case placeholder:text-[#4a5568]"
+            />
+            <button onClick={applySearch} className="text-[#bacac2] hover:text-[#00d4aa] transition-colors">
+              <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+            </button>
+          </div>
           <div className="flex items-center gap-2 mb-0.5">
             {loading ? <Skeleton className="w-32 h-7" /> : (
               <>
@@ -329,6 +381,37 @@ export default function Intelligence() {
             className="bg-[#00d4aa] hover:bg-[#46f1c5] text-[#005643] px-4 py-1.5 rounded text-[11px] font-bold uppercase tracking-wide transition-colors">
             MANUAL CHART
           </button>
+        </div>
+      </div>
+
+      {/* Stock universe switcher + chip strip */}
+      <div className="px-4 py-2 bg-[#0d1829] border-b border-[#1e293b] flex flex-col gap-2">
+        <div className="flex items-center gap-1 bg-[#081425] rounded p-0.5 self-start">
+          <button
+            onClick={() => setUniverse('NIFTY50')}
+            className={`px-3 py-1 rounded text-[10px] font-bold transition-colors ${universe === 'NIFTY50' ? 'bg-[#00d4aa] text-[#005643]' : 'text-[#bacac2] hover:text-[#d8e3fb]'}`}>
+            NIFTY 50
+          </button>
+          <button
+            onClick={() => setUniverse('BANKNIFTY')}
+            className={`px-3 py-1 rounded text-[10px] font-bold transition-colors ${universe === 'BANKNIFTY' ? 'bg-[#00d4aa] text-[#005643]' : 'text-[#bacac2] hover:text-[#d8e3fb]'}`}>
+            BANK NIFTY
+          </button>
+        </div>
+        <div className="flex gap-1.5 overflow-x-auto pb-1 hide-scrollbar">
+          {(universe === 'NIFTY50' ? NIFTY50_STOCKS : BANKNIFTY_STOCKS).map(s => (
+            <button
+              key={s}
+              onClick={() => navigate(`/intelligence/${s}`)}
+              className={`px-2.5 py-1 rounded text-[10px] font-mono font-bold whitespace-nowrap border transition-colors shrink-0 ${
+                symbol === s
+                  ? 'bg-[#00d4aa]/20 border-[#00d4aa]/60 text-[#00d4aa]'
+                  : 'bg-[#0d1829] border-[#2a3548] text-[#bacac2] hover:border-[#00d4aa]/30 hover:text-[#d8e3fb]'
+              }`}
+            >
+              {s}
+            </button>
+          ))}
         </div>
       </div>
 
