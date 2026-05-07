@@ -3,8 +3,21 @@ import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from 'rec
 import { runBacktest } from '../api/index.js'
 
 const STRATEGIES = [
-  { value: 'rsi',  label: 'Mean Reversion (RSI)' },
-  { value: 'macd', label: 'Trend Follower (MACD)' },
+  { value: 'rsi',    label: 'Mean Reversion (RSI)' },
+  { value: 'macd',   label: 'Trend Follower (MACD)' },
+  { value: 'custom', label: 'Custom Strategy (My Rules)' },
+]
+
+const IND_OPTIONS = [
+  { value: 'rsi',  label: 'RSI' },
+  { value: 'macd', label: 'MACD Histogram' },
+]
+
+const OP_OPTIONS = [
+  { value: 'below',         label: '< below' },
+  { value: 'above',         label: '> above' },
+  { value: 'crosses_above', label: '↑ crosses above' },
+  { value: 'crosses_below', label: '↓ crosses below' },
 ]
 
 const today = new Date().toISOString().split('T')[0]
@@ -32,6 +45,12 @@ export default function Backtest() {
   const [to, setTo]               = useState(today)
   const [capital, setCapital]     = useState(100000)
 
+  const [customRules, setCustomRules] = useState({
+    entryIndicator: 'rsi', entryOperator: 'crosses_above', entryValue: 30,
+    exitIndicator:  'rsi', exitOperator:  'crosses_above', exitValue:  70,
+    stopLossPct: 2, targetPct: 5,
+  })
+
   const [running, setRunning]     = useState(false)
   const [result, setResult]       = useState(null)
   const [error, setError]         = useState(null)
@@ -39,7 +58,9 @@ export default function Backtest() {
   const handleRun = async () => {
     setRunning(true); setError(null); setResult(null)
     try {
-      const { data } = await runBacktest({ symbol: symbol.toUpperCase(), strategy, from, to, capital: +capital })
+      const payload = { symbol: symbol.toUpperCase(), strategy, from, to, capital: +capital }
+      if (strategy === 'custom') payload.custom_rules = customRules
+      const { data } = await runBacktest(payload)
       setResult(data)
     } catch (e) {
       console.error('Backtest error', e)
@@ -109,10 +130,66 @@ export default function Backtest() {
             className="w-32 bg-[#081425] border border-[#3b4a44] rounded py-1.5 px-3 text-[#d8e3fb] font-mono text-sm focus:border-[#00d4aa] outline-none" />
         </div>
 
+      </div>
+
+      {/* Custom rules builder */}
+      {strategy === 'custom' && (
+        <div className="bg-[#081425] border border-[#ffa858]/30 rounded p-4 flex flex-col gap-3">
+          <p className="text-[11px] font-bold uppercase text-[#ffa858]">Custom Strategy Rules</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-2">
+              <p className="text-[10px] font-bold uppercase text-[#00d4aa]">Entry Signal</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <select value={customRules.entryIndicator} onChange={e => setCustomRules(r => ({ ...r, entryIndicator: e.target.value }))}
+                  className="bg-[#1f2a3c] border border-[#3b4a44] rounded py-1 px-2 text-[#d8e3fb] font-mono text-xs focus:border-[#00d4aa] outline-none">
+                  {IND_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+                <select value={customRules.entryOperator} onChange={e => setCustomRules(r => ({ ...r, entryOperator: e.target.value }))}
+                  className="bg-[#1f2a3c] border border-[#3b4a44] rounded py-1 px-2 text-[#d8e3fb] font-mono text-xs focus:border-[#00d4aa] outline-none">
+                  {OP_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+                <input type="number" value={customRules.entryValue} onChange={e => setCustomRules(r => ({ ...r, entryValue: e.target.value }))}
+                  className="w-20 bg-[#1f2a3c] border border-[#3b4a44] rounded py-1 px-2 text-[#d8e3fb] font-mono text-xs focus:border-[#00d4aa] outline-none" />
+              </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              <p className="text-[10px] font-bold uppercase text-[#ffb4ab]">Exit Signal</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <select value={customRules.exitIndicator} onChange={e => setCustomRules(r => ({ ...r, exitIndicator: e.target.value }))}
+                  className="bg-[#1f2a3c] border border-[#3b4a44] rounded py-1 px-2 text-[#d8e3fb] font-mono text-xs focus:border-[#00d4aa] outline-none">
+                  {IND_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+                <select value={customRules.exitOperator} onChange={e => setCustomRules(r => ({ ...r, exitOperator: e.target.value }))}
+                  className="bg-[#1f2a3c] border border-[#3b4a44] rounded py-1 px-2 text-[#d8e3fb] font-mono text-xs focus:border-[#00d4aa] outline-none">
+                  {OP_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+                <input type="number" value={customRules.exitValue} onChange={e => setCustomRules(r => ({ ...r, exitValue: e.target.value }))}
+                  className="w-20 bg-[#1f2a3c] border border-[#3b4a44] rounded py-1 px-2 text-[#d8e3fb] font-mono text-xs focus:border-[#00d4aa] outline-none" />
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <label className="text-[10px] font-bold uppercase text-[#bacac2]">Stop Loss %</label>
+              <input type="number" value={customRules.stopLossPct} min="0.5" max="20" step="0.5"
+                onChange={e => setCustomRules(r => ({ ...r, stopLossPct: e.target.value }))}
+                className="w-20 bg-[#1f2a3c] border border-[#3b4a44] rounded py-1 px-2 text-[#d8e3fb] font-mono text-xs focus:border-[#00d4aa] outline-none" />
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-[10px] font-bold uppercase text-[#bacac2]">Target %</label>
+              <input type="number" value={customRules.targetPct} min="0.5" max="50" step="0.5"
+                onChange={e => setCustomRules(r => ({ ...r, targetPct: e.target.value }))}
+                className="w-20 bg-[#1f2a3c] border border-[#3b4a44] rounded py-1 px-2 text-[#d8e3fb] font-mono text-xs focus:border-[#00d4aa] outline-none" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-[#1f2a3c] border border-[#3b4a44] rounded p-4 flex justify-end">
         <button
           onClick={handleRun}
           disabled={running}
-          className="md:ml-auto px-6 py-2 bg-[#00d4aa] text-[#005643] hover:bg-[#55fcd0] rounded font-mono text-sm font-bold transition-colors disabled:opacity-60 flex items-center gap-2"
+          className="px-6 py-2 bg-[#00d4aa] text-[#005643] hover:bg-[#55fcd0] rounded font-mono text-sm font-bold transition-colors disabled:opacity-60 flex items-center gap-2"
         >
           {running ? (
             <>

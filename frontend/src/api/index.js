@@ -26,4 +26,5 @@ export const exitAlgoPosition       = (id)            => api.post(`/algo/positio
 export const getAlgoTradesHistory   = ()             => api.get('/algo/trades/history')
 export const getAlgoLogs            = ()             => api.get('/algo/logs')
 export const placeManualTrade       = (data)          => api.post('/algo/paper-trade', data)
+export const getAlertHistory        = ()             => api.get('/alerts/history')
 

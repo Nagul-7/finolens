@@ -154,7 +154,7 @@ export default function Watchlist() {
       setAddInput('')
       setAddMsg(`${sym} added!`)
       setTimeout(() => setAddMsg(''), 2000)
-      loadData()
+      await loadData()
     } catch (e) {
       setAddMsg('Already in watchlist or invalid symbol')
       setTimeout(() => setAddMsg(''), 2000)

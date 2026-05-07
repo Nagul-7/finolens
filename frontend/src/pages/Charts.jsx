@@ -3,6 +3,7 @@ import { getOHLCV, placeManualTrade, getAlgoPositions } from '../api/index.js'
 import {
   computeEMA, computeSMA, computeBollingerBands, computeVWAP,
   computeSuperTrend, computePivotPoints, computeFibonacci,
+  computeRSI, computeMACD, computeStochastic,
 } from '../utils/indicatorEngine.js'
 import {
   addDrawing, removeDrawing, updateDrawingColor,
@@ -32,12 +33,44 @@ const IND_DEFS = {
   Pivot:      { label: 'Pivot',      fields: [],                                                                                                 color: '#c0c6db' },
   Fibonacci:  { label: 'Fibonacci',  fields: [{ key: 'bars',   label: 'Lookback', default: 50 }],                                              color: '#9b8cff' },
   Camarilla:  { label: 'Camarilla',  fields: [],                                                                                                 color: '#ffb85a' },
+  RSI: {
+    label: 'RSI', color: '#f59e0b', isPanelIndicator: true,
+    fields: [
+      { key: 'period',  label: 'Period',     default: 14 },
+      { key: 'obLevel', label: 'Overbought', default: 70 },
+      { key: 'osLevel', label: 'Oversold',   default: 30 },
+      { key: 'color',   label: 'Color',      default: '#f59e0b', type: 'color' },
+    ],
+  },
+  MACD: {
+    label: 'MACD', color: '#00d4aa', isPanelIndicator: true,
+    fields: [
+      { key: 'fast',          label: 'Fast',        default: 12 },
+      { key: 'slow',          label: 'Slow',        default: 26 },
+      { key: 'signal',        label: 'Signal',      default: 9  },
+      { key: 'macdColor',     label: 'MACD Line',   default: '#00d4aa', type: 'color' },
+      { key: 'signalColor',   label: 'Signal Line', default: '#ff6b9d', type: 'color' },
+      { key: 'histBullColor', label: 'Hist Bull',   default: '#00d4aa', type: 'color' },
+      { key: 'histBearColor', label: 'Hist Bear',   default: '#ffb4ab', type: 'color' },
+    ],
+  },
+  Stochastic: {
+    label: 'Stochastic', color: '#a78bfa', isPanelIndicator: true,
+    fields: [
+      { key: 'kPeriod', label: 'K Period', default: 14 },
+      { key: 'dPeriod', label: 'D Period', default: 3  },
+      { key: 'kColor',  label: 'K Color',  default: '#a78bfa', type: 'color' },
+      { key: 'dColor',  label: 'D Color',  default: '#f59e0b', type: 'color' },
+    ],
+  },
 }
 
 function labelFor(ind) {
   const def = IND_DEFS[ind.type]
   if (!def || def.fields.length === 0) return def?.label ?? ind.type
-  return `${def.label}(${def.fields.map(f => ind.params[f.key] ?? f.default).join(',')})`
+  const numericFields = def.fields.filter(f => f.type !== 'color')
+  if (numericFields.length === 0) return def.label
+  return `${def.label}(${numericFields.map(f => ind.params[f.key] ?? f.default).join(',')})`
 }
 
 // ─── Indicator Settings Popup ─────────────────────────────────────────────────
@@ -46,19 +79,33 @@ function IndicatorSettingsPopup({ type, onConfirm, onCancel }) {
   const [vals, setVals] = useState(Object.fromEntries(def.fields.map(f => [f.key, f.default])))
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onCancel}>
-      <div className="bg-[#111c2d] border border-[#2a3548] rounded-lg p-5 w-64 shadow-2xl" onClick={e => e.stopPropagation()}>
-        <div className="text-sm font-bold text-[#d8e3fb] mb-3">{def.label} Settings</div>
-        {def.fields.map(f => (
-          <div key={f.key} className="flex items-center justify-between mb-2">
-            <label className="text-xs text-[#bacac2]">{f.label}</label>
-            <input
-              type="number" value={vals[f.key]}
-              onChange={e => setVals(p => ({ ...p, [f.key]: parseFloat(e.target.value) || f.default }))}
-              className="w-16 bg-[#0d1829] border border-[#2a3548] rounded px-2 py-0.5 text-xs text-[#d8e3fb] text-right outline-none"
-            />
-          </div>
-        ))}
-        <div className="flex gap-2 mt-4">
+      <div className="bg-[#111c2d] border border-[#2a3548] rounded-lg p-5 w-64 shadow-2xl max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="text-sm font-bold text-[#d8e3fb] mb-3 shrink-0">{def.label} Settings</div>
+        <div className="overflow-y-auto flex-1 pr-1">
+          {def.fields.map(f => (
+            <div key={f.key} className="flex items-center justify-between mb-2">
+              <label className="text-xs text-[#bacac2]">{f.label}</label>
+              {f.type === 'color' ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={vals[f.key] || f.default}
+                    onChange={e => setVals(p => ({ ...p, [f.key]: e.target.value }))}
+                    className="w-8 h-6 rounded cursor-pointer border border-[#2a3548] bg-transparent"
+                  />
+                  <span className="text-[10px] font-mono text-[#bacac2]">{vals[f.key] || f.default}</span>
+                </div>
+              ) : (
+                <input
+                  type="number" value={vals[f.key]}
+                  onChange={e => setVals(p => ({ ...p, [f.key]: parseFloat(e.target.value) || f.default }))}
+                  className="w-16 bg-[#0d1829] border border-[#2a3548] rounded px-2 py-0.5 text-xs text-[#d8e3fb] text-right outline-none"
+                />
+              )}
+            </div>
+          ))}
+        </div>
+        <div className="flex gap-2 mt-4 shrink-0">
           <button onClick={() => onConfirm(vals)}
             className="flex-1 py-2 rounded bg-[#00d4aa]/20 text-[#00d4aa] text-xs font-bold hover:bg-[#00d4aa]/30 transition-colors">
             Add
@@ -102,7 +149,7 @@ function ToolsMenu({ onSelectTool, onAddIndicator, onSettingsRequired, onClose }
       ))}
       <div className="border-t border-[#1e293b] mt-1 pt-1">
         <div className="px-3 py-1 text-[9px] uppercase tracking-widest text-[#4a5568] font-bold">Indicators</div>
-        {['EMA','SMA','BB','VWAP','SuperTrend'].map(type => (
+        {['EMA','SMA','BB','VWAP','SuperTrend','RSI','MACD','Stochastic'].map(type => (
           <button key={type} onClick={() => handleInd(type)}
             className="w-full flex items-center px-3 py-1.5 hover:bg-[#1a2540] text-xs text-[#bacac2] hover:text-[#d8e3fb]">
             <span className="w-2 h-2 rounded-full mr-2 flex-shrink-0" style={{ background: IND_DEFS[type].color }} />
@@ -527,6 +574,126 @@ function DrawingContextMenu({ x, y, onDelete, onChangeColor, onClose }) {
   )
 }
 
+// ─── Oscillator Sub-Panel ────────────────────────────────────────────────────
+// Renders RSI, MACD, or Stochastic in a 120 px lightweight-charts panel.
+function SubPanel({ ind, ohlcv, onRemove }) {
+  const containerRef = useRef(null)
+  const def = IND_DEFS[ind.type]
+  const p   = ind.params
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container || !ohlcv?.length) return
+
+    const candles = (ohlcv ?? []).filter(r => r.close)
+    const closes  = candles.map(r => r.close)
+    const times   = candles.map(r =>
+      typeof r.timestamp === 'number' ? r.timestamp : r.timestamp.split(' ')[0]
+    )
+
+    let chart = null, ro = null, active = true
+
+    import('lightweight-charts').then(({ createChart }) => {
+      if (!active || !containerRef.current) return
+      container.innerHTML = ''
+
+      chart = createChart(container, {
+        width:  container.clientWidth || 800,
+        height: 120,
+        layout:          { background: { color: '#080f1e' }, textColor: '#bacac2', fontSize: 10 },
+        grid:            { vertLines: { color: '#1a2540' }, horzLines: { color: '#1a2540' } },
+        timeScale:       { borderColor: '#2a3548', timeVisible: true },
+        rightPriceScale: { borderColor: '#2a3548' },
+        crosshair:       { mode: 1 },
+        handleScroll:    true,
+        handleScale:     true,
+      })
+
+      const addLine = (values, color, lineWidth = 1.5) => {
+        const s = chart.addLineSeries({ color, lineWidth, priceLineVisible: false, lastValueVisible: true, crosshairMarkerVisible: true })
+        s.setData(values.map((v, i) => v != null ? { time: times[i], value: +v.toFixed(3) } : null).filter(Boolean))
+        return s
+      }
+      const addHLevel = (value, color) => {
+        const s = chart.addLineSeries({ color, lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false })
+        s.setData(times.map(t => ({ time: t, value })))
+      }
+
+      if (ind.type === 'RSI') {
+        const rsi = computeRSI(closes, p.period || 14)
+        addLine(rsi, p.color || '#f59e0b', 1.5)
+        addHLevel(p.obLevel || 70, 'rgba(255,180,171,0.5)')
+        addHLevel(p.osLevel || 30, 'rgba(0,212,170,0.5)')
+      }
+
+      else if (ind.type === 'MACD') {
+        const { macdLine, signalLine: sigShort, hist, offset } = computeMACD(
+          closes, p.fast || 12, p.slow || 26, p.signal || 9
+        )
+        // Pad signalLine and hist to align with full closes/times array
+        const pad          = new Array(offset).fill(null)
+        const signalPadded = pad.concat(sigShort)
+        const histPadded   = pad.concat(hist)
+
+        const histSeries = chart.addHistogramSeries({ priceLineVisible: false, lastValueVisible: false })
+        histSeries.setData(
+          histPadded
+            .map((v, i) => v != null ? {
+              time:  times[i],
+              value: v,
+              color: v >= 0 ? (p.histBullColor || '#00d4aa') : (p.histBearColor || '#ffb4ab'),
+            } : null)
+            .filter(Boolean)
+        )
+        addLine(macdLine,     p.macdColor   || '#00d4aa', 1.5)
+        addLine(signalPadded, p.signalColor || '#ff6b9d', 1)
+      }
+
+      else if (ind.type === 'Stochastic') {
+        const { kLine, dLine } = computeStochastic(candles, p.kPeriod || 14, p.dPeriod || 3)
+        addLine(kLine, p.kColor || '#a78bfa', 1.5)
+        addLine(dLine, p.dColor || '#f59e0b', 1)
+        addHLevel(80, 'rgba(255,180,171,0.4)')
+        addHLevel(20, 'rgba(0,212,170,0.4)')
+      }
+
+      chart.timeScale().fitContent()
+
+      ro = new ResizeObserver(() => {
+        if (chart && containerRef.current) {
+          chart.applyOptions({ width: containerRef.current.clientWidth || 800 })
+        }
+      })
+      ro.observe(container)
+    })
+
+    return () => {
+      active = false
+      if (ro)    ro.disconnect()
+      if (chart) chart.remove()
+    }
+  }, [ohlcv, ind])
+
+  const label = ind.type === 'RSI'
+    ? `RSI(${p.period || 14})`
+    : ind.type === 'MACD'
+    ? `MACD(${p.fast || 12},${p.slow || 26},${p.signal || 9})`
+    : `Stoch(${p.kPeriod || 14},${p.dPeriod || 3})`
+
+  return (
+    <div className="shrink-0 border-t border-[#1e293b] bg-[#080f1e]">
+      <div className="flex items-center justify-between px-3 py-1 border-b border-[#1e293b]">
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full" style={{ background: def?.color || '#bacac2' }} />
+          <span className="text-[10px] font-bold text-[#bacac2] uppercase tracking-wide">{label}</span>
+        </div>
+        <button onClick={onRemove} className="text-[#4a5568] hover:text-[#ffb4ab] text-xs leading-none transition-colors">×</button>
+      </div>
+      <div ref={containerRef} style={{ height: '120px' }} />
+    </div>
+  )
+}
+
 // ─── Main Charts Page ─────────────────────────────────────────────────────────
 export default function Charts() {
   const [symbol,    setSymbol]    = useState('RELIANCE')
@@ -748,13 +915,16 @@ export default function Charts() {
 
         {/* Indicator chips */}
         <div className="flex items-center gap-1 flex-wrap">
-          {indicators.map(ind => (
-            <span key={ind.id} className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border"
-              style={{ color: IND_DEFS[ind.type]?.color||'#bacac2', borderColor:(IND_DEFS[ind.type]?.color||'#bacac2')+'44', background:(IND_DEFS[ind.type]?.color||'#bacac2')+'12' }}>
-              {labelFor(ind)}
-              <button onClick={() => removeIndicator(ind.id)} className="opacity-60 hover:opacity-100 leading-none text-[11px]">×</button>
-            </span>
-          ))}
+          {indicators.map(ind => {
+            const chipColor = ind.params?.color || ind.params?.macdColor || ind.params?.kColor || IND_DEFS[ind.type]?.color || '#bacac2'
+            return (
+              <span key={ind.id} className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border"
+                style={{ color: chipColor, borderColor: chipColor + '44', background: chipColor + '12' }}>
+                {labelFor(ind)}
+                <button onClick={() => removeIndicator(ind.id)} className="opacity-60 hover:opacity-100 leading-none text-[11px]">×</button>
+              </span>
+            )
+          })}
         </div>
       </div>
 
@@ -774,6 +944,15 @@ export default function Charts() {
             />
         }
       </div>
+
+      {/* ── Sub-panels: RSI / MACD / Stochastic ─────────────────────────────── */}
+      {indicators.some(i => IND_DEFS[i.type]?.isPanelIndicator) && (
+        <div className="shrink-0 overflow-y-auto" style={{ maxHeight: '360px' }}>
+          {indicators.filter(i => IND_DEFS[i.type]?.isPanelIndicator).map(ind => (
+            <SubPanel key={ind.id} ind={ind} ohlcv={ohlcv} onRemove={() => removeIndicator(ind.id)} />
+          ))}
+        </div>
+      )}
 
       {/* ── Trade Panel ──────────────────────────────────────────────────────── */}
       <TradePanel symbol={symbol} positions={positions} onTrade={handleTrade} sessionPnl={sessionPnl} brokerStatus={brokerStatus} />

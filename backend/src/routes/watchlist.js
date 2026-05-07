@@ -1,4 +1,6 @@
 const express = require("express");
+const fs      = require("fs");
+const path    = require("path");
 const db = require("../config/database");
 const axios = require("axios");
 const cacheService = require("../services/cacheService");
@@ -6,8 +8,27 @@ const cacheService = require("../services/cacheService");
 const router = express.Router();
 const ML = axios.create({ baseURL: process.env.ML_SERVICE_URL || "http://localhost:8000", timeout: 30000 });
 
-// In-memory fallback when DB is unavailable
-let _memWatchlist = ["RELIANCE", "HDFCBANK", "TCS", "INFY"];
+const WATCHLIST_FILE = path.join(__dirname, "../../data/watchlist.json");
+
+function loadWatchlistFile() {
+  try {
+    return JSON.parse(fs.readFileSync(WATCHLIST_FILE, "utf8"));
+  } catch {
+    return ["RELIANCE", "HDFCBANK", "TCS", "INFY"];
+  }
+}
+
+function saveWatchlistFile(symbols) {
+  try {
+    fs.mkdirSync(path.dirname(WATCHLIST_FILE), { recursive: true });
+    fs.writeFileSync(WATCHLIST_FILE, JSON.stringify(symbols, null, 2));
+  } catch (e) {
+    console.error("[watchlist] file save failed:", e.message);
+  }
+}
+
+// In-memory fallback when DB is unavailable (seeded from file)
+let _memWatchlist = loadWatchlistFile();
 
 async function getWatchlistSymbols() {
   try {
@@ -37,7 +58,10 @@ router.post("/", async (req, res) => {
       [symbol]
     );
   } catch {
-    if (!_memWatchlist.includes(symbol)) _memWatchlist.push(symbol);
+    if (!_memWatchlist.includes(symbol)) {
+      _memWatchlist.push(symbol);
+      saveWatchlistFile(_memWatchlist);
+    }
   }
   return res.status(201).json({ symbol });
 });
@@ -49,6 +73,7 @@ router.delete("/:symbol", async (req, res) => {
     await db.query("DELETE FROM watchlist WHERE symbol = $1", [symbol]);
   } catch {
     _memWatchlist = _memWatchlist.filter((s) => s !== symbol);
+    saveWatchlistFile(_memWatchlist);
   }
   return res.json({ removed: symbol });
 });

@@ -18,7 +18,7 @@ const backtestRouter  = require("./routes/backtest");
 const algoRouter      = require("./routes/algo");
 const dashboardRouter = require("./routes/dashboard");
 const { errorHandler, notFound } = require("./middleware/errorHandler");
-const { setupLiveAlerts } = require("./socket/liveAlerts");
+const { setupLiveAlerts, alertHistory } = require("./socket/liveAlerts");
 
 const app = express();
 const httpServer = createServer(app);
@@ -79,6 +79,8 @@ app.use("/api/algo",      algoRouter);
 app.get("/health", (_req, res) =>
   res.json({ status: "ok", service: "finolens-backend", version: "2.0.0" })
 );
+
+app.get("/api/alerts/history", (_req, res) => res.json(alertHistory));
 
 app.get("/api/broker/status", (_req, res) => {
   const brokerClient = require("./services/brokerClient");

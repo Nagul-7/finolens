@@ -138,6 +138,26 @@ export function computeFibonacci(high, low) {
   }
 }
 
+// Stochastic Oscillator — %K and %D lines
+export function computeStochastic(candles, kPeriod = 14, dPeriod = 3) {
+  const kLine = new Array(candles.length).fill(null)
+  const dLine = new Array(candles.length).fill(null)
+  for (let i = kPeriod - 1; i < candles.length; i++) {
+    const slice = candles.slice(i - kPeriod + 1, i + 1)
+    const highestHigh = Math.max(...slice.map(c => c.high))
+    const lowestLow   = Math.min(...slice.map(c => c.low))
+    const range = highestHigh - lowestLow
+    kLine[i] = range === 0 ? 50 : ((candles[i].close - lowestLow) / range) * 100
+  }
+  for (let i = kPeriod + dPeriod - 2; i < candles.length; i++) {
+    const slice = kLine.slice(i - dPeriod + 1, i + 1).filter(v => v !== null)
+    if (slice.length === dPeriod) {
+      dLine[i] = slice.reduce((a, b) => a + b, 0) / dPeriod
+    }
+  }
+  return { kLine, dLine }
+}
+
 // ─── Signal Markers ───────────────────────────────────────────────────────────
 // showText=false → clean colored arrows with no label (for Intelligence tab)
 // showText=true  → arrows with short label text (for Charts compare panel)

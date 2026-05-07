@@ -14,6 +14,14 @@ const ML = axios.create({
   timeout: 25000,
 });
 
+const alertHistory = [];
+const MAX_HISTORY = 100;
+
+function addAlert(event, data) {
+  alertHistory.unshift({ event, ...data, recordedAt: new Date().toISOString() });
+  if (alertHistory.length > MAX_HISTORY) alertHistory.pop();
+}
+
 const DEFAULT_WATCHLIST = ["RELIANCE", "HDFCBANK", "TCS", "INFY"];
 
 function isMarketOpen() {
@@ -45,23 +53,22 @@ async function scanForAlerts(symbols, io) {
     const sym = symbols[i];
 
     if (d.call === "BUY" && d.confidence >= 70) {
-      io.emit("new_call", {
-        symbol: sym,
-        call: d.call,
-        confidence: d.confidence,
-        price: d.current_price,
-        reason: d.signals?.[0]?.reason || "Technical signal",
+      const payload = {
+        symbol: sym, call: d.call, confidence: d.confidence,
+        price: d.current_price, reason: d.signals?.[0]?.reason || "Technical signal",
         timestamp: new Date().toISOString(),
-      });
+      };
+      io.emit("new_call", payload);
+      addAlert("new_call", payload);
     }
 
     if (d.indicators?.volume_ratio > 2.0) {
-      io.emit("volume_spike", {
-        symbol: sym,
-        volume_ratio: d.indicators.volume_ratio,
-        price: d.current_price,
-        timestamp: new Date().toISOString(),
-      });
+      const payload = {
+        symbol: sym, volume_ratio: d.indicators.volume_ratio,
+        price: d.current_price, timestamp: new Date().toISOString(),
+      };
+      io.emit("volume_spike", payload);
+      addAlert("volume_spike", payload);
     }
   });
 }
@@ -104,4 +111,4 @@ function setupLiveAlerts(io, getWatchlistFn) {
   };
 }
 
-module.exports = { setupLiveAlerts };
+module.exports = { setupLiveAlerts, alertHistory };

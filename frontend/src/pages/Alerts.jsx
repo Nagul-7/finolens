@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { io } from 'socket.io-client'
+import { getAlertHistory } from '../api/index.js'
 
 function makeBuy(data) {
   return {
@@ -57,12 +58,34 @@ function makeLossLimit(data) {
   }
 }
 
+const PRICE_ALERTS_KEY = 'finolens_price_alerts'
+
+function loadPriceAlerts() {
+  try { return JSON.parse(localStorage.getItem(PRICE_ALERTS_KEY) || '[]') } catch { return [] }
+}
+
 export default function Alerts() {
   const [alerts, setAlerts] = useState([])
   const [filter, setFilter] = useState('ALL')
   const [connected, setConnected] = useState(false)
+  const [priceAlerts, setPriceAlerts] = useState(loadPriceAlerts)
+  const [showCreate, setShowCreate] = useState(false)
+  const [newAlert, setNewAlert] = useState({ symbol: '', condition: 'above', price: '' })
   const socketRef = useRef(null)
   const filters = ['ALL', 'BUY', 'SELL', 'VOLUME', 'ALGO']
+
+  useEffect(() => {
+    getAlertHistory()
+      .then(res => {
+        const history = (res.data ?? []).map(d => {
+          if (d.event === 'new_call')     return makeBuy(d)
+          if (d.event === 'volume_spike') return makeVolume(d)
+          return null
+        }).filter(Boolean)
+        setAlerts(history)
+      })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     const socket = io({ transports: ['websocket', 'polling'], reconnectionAttempts: 10, reconnectionDelay: 1000 })
@@ -91,6 +114,24 @@ export default function Alerts() {
   }, [])
 
   const dismiss = id => setAlerts(prev => prev.map(a => a.id === id ? { ...a, active: false } : a))
+
+  const addPriceAlert = () => {
+    const sym = newAlert.symbol.trim().toUpperCase()
+    const price = parseFloat(newAlert.price)
+    if (!sym || !price) return
+    const entry = { id: Date.now(), symbol: sym, condition: newAlert.condition, price, createdAt: new Date().toLocaleString('en-IN') }
+    const updated = [entry, ...priceAlerts]
+    setPriceAlerts(updated)
+    localStorage.setItem(PRICE_ALERTS_KEY, JSON.stringify(updated))
+    setNewAlert({ symbol: '', condition: 'above', price: '' })
+    setShowCreate(false)
+  }
+
+  const removePriceAlert = id => {
+    const updated = priceAlerts.filter(a => a.id !== id)
+    setPriceAlerts(updated)
+    localStorage.setItem(PRICE_ALERTS_KEY, JSON.stringify(updated))
+  }
 
   const filtered = filter === 'ALL' ? alerts
     : filter === 'BUY'    ? alerts.filter(a => a.type.includes('BUY') || a.type.includes('STRONG'))
@@ -182,13 +223,84 @@ export default function Alerts() {
           </div>
         )}
 
-        {/* Create alert CTA */}
-        <div className="mt-4 bg-[#111c2d] border border-dashed border-[#3b4a44] rounded-xl p-6 flex flex-col items-center gap-3 hover:bg-[#1f2a3c] transition-colors cursor-pointer">
-          <span className="material-symbols-outlined text-[32px] text-[#3b4a44]">add_circle</span>
-          <div className="text-center">
-            <p className="font-mono font-bold text-[#bacac2]">Create Custom Alert</p>
-            <p className="text-[11px] text-[#85948d] mt-1">Set price triggers, indicator crossovers, or volume spikes</p>
+        {/* Price Alerts */}
+        <div className="mt-6 bg-[#111c2d] border border-[#3b4a44] rounded-xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-[#3b4a44] bg-[#0d1829] flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-[16px] text-[#ffa858]">price_check</span>
+              <h2 className="text-[11px] font-bold uppercase text-[#d8e3fb]">Price Alerts</h2>
+              {priceAlerts.length > 0 && (
+                <span className="bg-[#ffa858]/20 text-[#ffa858] px-1.5 py-0.5 rounded text-[9px] font-bold">{priceAlerts.length}</span>
+              )}
+            </div>
+            <button
+              onClick={() => setShowCreate(v => !v)}
+              className="flex items-center gap-1 px-2.5 py-1 rounded bg-[#00d4aa]/10 border border-[#00d4aa]/30 text-[#00d4aa] text-[10px] font-bold hover:bg-[#00d4aa]/20 transition-colors"
+            >
+              <span className="material-symbols-outlined text-[13px]">{showCreate ? 'close' : 'add'}</span>
+              {showCreate ? 'CANCEL' : 'NEW ALERT'}
+            </button>
           </div>
+
+          {showCreate && (
+            <div className="px-4 py-3 border-b border-[#3b4a44] bg-[#081425] flex flex-col gap-3">
+              <p className="text-[10px] font-bold uppercase text-[#bacac2]">Create Price Alert</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <input
+                  value={newAlert.symbol}
+                  onChange={e => setNewAlert(a => ({ ...a, symbol: e.target.value.toUpperCase() }))}
+                  placeholder="SYMBOL"
+                  className="w-28 bg-[#1f2a3c] border border-[#3b4a44] rounded py-1.5 px-2 text-[#d8e3fb] font-mono text-xs focus:border-[#00d4aa] outline-none uppercase placeholder:normal-case placeholder:text-[#bacac2]"
+                />
+                <select
+                  value={newAlert.condition}
+                  onChange={e => setNewAlert(a => ({ ...a, condition: e.target.value }))}
+                  className="bg-[#1f2a3c] border border-[#3b4a44] rounded py-1.5 px-2 text-[#d8e3fb] font-mono text-xs focus:border-[#00d4aa] outline-none"
+                >
+                  <option value="above">Price rises above</option>
+                  <option value="below">Price falls below</option>
+                </select>
+                <input
+                  type="number"
+                  value={newAlert.price}
+                  onChange={e => setNewAlert(a => ({ ...a, price: e.target.value }))}
+                  placeholder="₹ target price"
+                  className="w-36 bg-[#1f2a3c] border border-[#3b4a44] rounded py-1.5 px-2 text-[#d8e3fb] font-mono text-xs focus:border-[#00d4aa] outline-none"
+                />
+                <button
+                  onClick={addPriceAlert}
+                  className="px-4 py-1.5 bg-[#00d4aa] text-[#005643] rounded text-xs font-bold hover:bg-[#55fcd0] transition-colors"
+                >
+                  CREATE
+                </button>
+              </div>
+            </div>
+          )}
+
+          {priceAlerts.length === 0 && !showCreate ? (
+            <div className="p-6 text-center">
+              <p className="text-xs text-[#bacac2]">No price alerts set.</p>
+              <p className="text-[10px] text-[#85948d] mt-1">Click NEW ALERT to set a price trigger.</p>
+            </div>
+          ) : (
+            priceAlerts.map(a => (
+              <div key={a.id} className="px-4 py-3 border-b border-[#3b4a44] last:border-b-0 flex justify-between items-center hover:bg-[#2f3a4c] transition-colors">
+                <div>
+                  <span className="font-mono font-bold text-[#d8e3fb] text-sm">{a.symbol}</span>
+                  <span className="ml-2 text-[11px] text-[#bacac2]">
+                    {a.condition === 'above' ? '↑ rises above' : '↓ falls below'}{' '}
+                    <span className="font-mono text-[#ffa858]">₹{a.price.toLocaleString('en-IN')}</span>
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-[10px] text-[#85948d]">{a.createdAt}</span>
+                  <button onClick={() => removePriceAlert(a.id)} className="text-[#bacac2] hover:text-[#ffb4ab] transition-colors">
+                    <span className="material-symbols-outlined text-[15px]">close</span>
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </main>

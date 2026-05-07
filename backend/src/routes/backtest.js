@@ -56,6 +56,92 @@ function computeMACDHist(closes) {
 
 function round2(n) { return Math.round(n * 100) / 100; }
 
+function runCustomBacktest(bars, rules, capital) {
+  if (!bars || bars.length < 50) {
+    return { win_rate: 0, total_trades: 0, avg_pnl: 0, max_drawdown: 0, sharpe_ratio: 0, equity_curve: [], trade_log: [] };
+  }
+
+  const closes = bars.map((b) => parseFloat(b.close));
+  const dates  = bars.map((b) => (b.timestamp || b.date || "").substring(0, 10));
+
+  const rsiArr  = computeRSI(closes);
+  const histArr = computeMACDHist(closes);
+
+  function getVal(indicator, i) {
+    if (indicator === "rsi")  return rsiArr[i];
+    if (indicator === "macd") return histArr[i];
+    return null;
+  }
+
+  function check(indicator, operator, threshold, i) {
+    const curr = getVal(indicator, i);
+    const prev = getVal(indicator, i - 1);
+    if (curr == null) return false;
+    const t = parseFloat(threshold);
+    if (operator === "below")         return curr < t;
+    if (operator === "above")         return curr > t;
+    if (operator === "crosses_above") return prev != null && prev <= t && curr > t;
+    if (operator === "crosses_below") return prev != null && prev >= t && curr < t;
+    return false;
+  }
+
+  const slPct = parseFloat(rules.stopLossPct || 2) / 100;
+  const tpPct = parseFloat(rules.targetPct   || 5) / 100;
+
+  let equity = capital;
+  const trades = [];
+  let position = null;
+  const step = Math.floor(closes.length / 10);
+  const checkpoints = new Set();
+  for (let i = 0; i < closes.length; i += step) checkpoints.add(i);
+  checkpoints.add(closes.length - 1);
+  const equityCurve = [];
+
+  for (let i = 35; i < closes.length; i++) {
+    if (!position) {
+      if (check(rules.entryIndicator, rules.entryOperator, rules.entryValue, i)) {
+        const lotSize = Math.max(1, Math.floor((capital * 0.05) / closes[i]));
+        position = { entry: closes[i], lotSize, date: dates[i] };
+      }
+    } else {
+      const pnlPct = (closes[i] - position.entry) / position.entry;
+      const exitByRule = check(rules.exitIndicator, rules.exitOperator, rules.exitValue, i);
+      const exitBySL   = pnlPct <= -slPct;
+      const exitByTP   = pnlPct >= tpPct;
+      if (exitByRule || exitBySL || exitByTP || i === closes.length - 1) {
+        const pnl = round2((closes[i] - position.entry) * position.lotSize);
+        trades.push({ dt: position.date + " → " + dates[i], symbol: "NSE", type: "LONG",
+          entry: round2(position.entry), exit: round2(closes[i]), pnl, positive: pnl > 0 });
+        equity += pnl;
+        position = null;
+      }
+    }
+    if (checkpoints.has(i)) {
+      const label = dates[i]?.substring(0, 7) || `D${i}`;
+      equityCurve.push({ t: label, strategy: round2((equity / capital) * 100), benchmark: round2(100 + (i / closes.length) * 28) });
+    }
+  }
+
+  const wins    = trades.filter((t) => t.positive);
+  const winRate = trades.length ? round2((wins.length / trades.length) * 100) : 0;
+  const avgPnl  = trades.length ? Math.round(trades.reduce((s, t) => s + t.pnl, 0) / trades.length) : 0;
+  let peak = capital, runCap = capital, maxDD = 0;
+  for (const t of trades) {
+    runCap += t.pnl;
+    if (runCap > peak) peak = runCap;
+    const dd = peak > 0 ? (peak - runCap) / peak * 100 : 0;
+    if (dd > maxDD) maxDD = dd;
+  }
+  const returns  = trades.map((t) => t.pnl / capital);
+  const avgR     = returns.reduce((s, v) => s + v, 0) / (returns.length || 1);
+  const variance = returns.reduce((s, v) => s + (v - avgR) ** 2, 0) / (returns.length || 1);
+  const sharpe   = variance > 0 ? round2((avgR / Math.sqrt(variance)) * Math.sqrt(252)) : 0;
+
+  return { win_rate: winRate, total_trades: trades.length, avg_pnl: avgPnl,
+    max_drawdown: round2(-maxDD), sharpe_ratio: sharpe, equity_curve: equityCurve,
+    trade_log: trades.slice(-20).reverse() };
+}
+
 function runBacktest(bars, strategyName, capital) {
   if (!bars || bars.length < 50) {
     return { win_rate: 0, total_trades: 0, avg_pnl: 0, max_drawdown: 0, sharpe_ratio: 0, equity_curve: [], trade_log: [] };
@@ -167,7 +253,7 @@ function runBacktest(bars, strategyName, capital) {
 
 // POST /api/backtest/run
 router.post("/run", async (req, res) => {
-  const { symbol = "NIFTY", strategy = "Mean Reversion (Nifty 50)", capital = 500000 } = req.body;
+  const { symbol = "NIFTY", strategy = "Mean Reversion (Nifty 50)", capital = 500000, custom_rules } = req.body;
   const from_date = req.body.from_date || req.body.from;
   const to_date   = req.body.to_date   || req.body.to;
 
@@ -182,12 +268,13 @@ router.post("/run", async (req, res) => {
       const { data } = await ML.get(`/market/ohlcv/${sym}`, { params });
       bars = data;
     } catch {
-      // Fallback to NIFTY50 proxy symbol
       const { data } = await ML.get("/market/ohlcv/RELIANCE", { params });
       bars = data;
     }
 
-    const result = runBacktest(bars, strategy, Number(capital));
+    const result = strategy === "custom" && custom_rules
+      ? runCustomBacktest(bars, custom_rules, Number(capital))
+      : runBacktest(bars, strategy, Number(capital));
     return res.json(result);
   } catch (err) {
     return res.status(502).json({ error: "Backtest failed.", detail: err.message });
