@@ -35,4 +35,5 @@ export const activateStrategy       = (id, data)      => api.post(`/algo/strateg
 export const deactivateStrategy     = (id)            => api.post(`/algo/strategy/${id}/deactivate`)
 export const getAlgoPerformance     = ()             => api.get('/algo/performance/summary')
 export const getBrokerStatus        = ()             => api.get('/broker/status')
+export const getMarketScan          = ()             => api.get('/dashboard/market-scan')
 

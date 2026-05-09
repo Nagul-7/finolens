@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   getWatchlist, getWatchlistQuotes, getScreener, getIndex,
-  getAlgoPnlToday, getAlgoAlignments,
+  getAlgoPnlToday, getAlgoAlignments, getMarketScan,
 } from '../api/index.js'
 
 function Skeleton({ className = '' }) {
@@ -17,6 +17,13 @@ const SIG_STYLE = {
   'STRONG SELL':  'text-[#ffb4ab] bg-[#ffb4ab]/20 border-[#ffb4ab]/50',
   'ALGO SIGNAL':  'text-[#00d4aa] bg-[#00d4aa]/15 border-[#00d4aa]/40',
 }
+
+const SCOREBOARD_SECTORS = [
+  'ALL','IT','Banking','Energy','FMCG','Pharma',
+  'Auto','Finance','Metals','Infrastructure',
+  'Cement','Telecom','Consumer','Insurance',
+  'Healthcare','Chemicals','Paints','Conglomerate','Other',
+]
 
 function StockCard({ item, onClick, onChartClick }) {
   const pos    = (item.change_pct ?? 0) >= 0
@@ -60,7 +67,6 @@ function StockCard({ item, onClick, onChartClick }) {
   )
 }
 
-// Compact horizontal card for Today's Picks — shows strategy_name when present
 function PickCard({ item, onClick }) {
   const pos      = (item.change_pct ?? 0) >= 0
   const sig      = item.signal ?? 'NEUTRAL'
@@ -83,7 +89,6 @@ function PickCard({ item, onClick }) {
         ) : (
           <span className="text-[10px] text-[#bacac2] truncate block">{item.sector ?? 'NSE:EQ'}</span>
         )}
-        {/* Score bar */}
         <div className="mt-1.5 flex items-center gap-2">
           <div className="flex-1 bg-[#2a3548] rounded-full h-1">
             <div className="h-1 rounded-full" style={{ width: `${Math.min(100, score)}%`, background: scoreColor }} />
@@ -119,6 +124,14 @@ export default function Dashboard() {
   const [loading,      setLoading]      = useState(true)
   const [error,        setError]        = useState(null)
 
+  // Market Scoreboard
+  const [marketScan,   setMarketScan]   = useState(null)
+  const [scanLoading,  setScanLoading]  = useState(true)
+  const [scoreFilter,  setScoreFilter]  = useState('ALL')
+  const [sectorFilter, setSectorFilter] = useState('ALL')
+  const [indexFilter,  setIndexFilter]  = useState('ALL')
+
+  // Watchlist filters
   const [query,       setQuery]       = useState('')
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [sigFilters,  setSigFilters]  = useState({ BUY: true, NEUTRAL: true, SELL: true })
@@ -166,7 +179,6 @@ export default function Dashboard() {
 
       if (alignRes.status === 'fulfilled') {
         const rawAlign = alignRes.value.data?.alignments ?? []
-        // Enrich alignment entries with live quote data
         const enriched = rawAlign.map(a => ({
           ...a,
           ltp:        quotesMap[a.symbol]?.ltp        ?? a.current_price ?? null,
@@ -182,18 +194,28 @@ export default function Dashboard() {
     }
   }, [])
 
+  const loadMarketScan = useCallback(() => {
+    setScanLoading(true)
+    getMarketScan()
+      .then(r => setMarketScan(r.data))
+      .catch(() => {})
+      .finally(() => setScanLoading(false))
+  }, [])
+
   useEffect(() => {
     load()
     const id = setInterval(load, 60000)
     return () => clearInterval(id)
   }, [load])
 
-  // Today's picks: merge screener BUY signals with algo alignment results
+  useEffect(() => {
+    loadMarketScan()
+  }, [loadMarketScan])
+
   const topOpportunities = useMemo(() => {
     const buySet = new Set()
     const picks  = []
 
-    // Screener BUY/STRONG BUY with score > 60
     for (const s of allStocks) {
       if ((s.signal === 'BUY' || s.signal === 'STRONG BUY') && (s.score ?? 0) > 60) {
         buySet.add(s.symbol)
@@ -201,11 +223,9 @@ export default function Dashboard() {
       }
     }
 
-    // Algo alignment results with score >= 65 — skip if already from screener
     for (const a of alignments) {
       if ((a.score ?? 0) < 65) continue
       if (buySet.has(a.symbol)) {
-        // Enrich existing pick with strategy name
         const existing = picks.find(p => p.symbol === a.symbol)
         if (existing && !existing.strategy_name) existing.strategy_name = a.strategy_name
         continue
@@ -227,7 +247,6 @@ export default function Dashboard() {
       .slice(0, 6)
   }, [allStocks, alignments])
 
-  // Watchlist display with filters
   const displayList = useMemo(() => {
     const q    = query.trim().toUpperCase()
     let base   = q
@@ -247,6 +266,17 @@ export default function Dashboard() {
     if (minScore > 0)     base = base.filter(s => (s.score ?? 0) >= minScore)
     return base
   }, [allStocks, watchSymbols, query, sigFilters, sector, minScore])
+
+  // Filtered scoreboard rows (memoised so 50+ stock filter doesn't run on every keystroke)
+  const scoreboardRows = useMemo(() => {
+    const stocks = marketScan?.all_stocks ?? []
+    return stocks.filter(s =>
+      (indexFilter  === 'ALL' || s.index  === indexFilter) &&
+      (scoreFilter  === 'ALL' || s.signal === scoreFilter ||
+        (scoreFilter === 'BUY' && s.technical_score >= 58)) &&
+      (sectorFilter === 'ALL' || s.sector === sectorFilter)
+    )
+  }, [marketScan, indexFilter, scoreFilter, sectorFilter])
 
   const activeFiltersCount = [
     !sigFilters.BUY || !sigFilters.NEUTRAL || !sigFilters.SELL,
@@ -271,8 +301,8 @@ export default function Dashboard() {
   const nifty     = fmtIdx(indexData?.nifty?.ltp,     indexData?.nifty?.change_pct)
   const banknifty = fmtIdx(indexData?.banknifty?.ltp, indexData?.banknifty?.change_pct)
 
-  const winRate     = pnlToday?.win_rate_today ?? null
-  const bestStrat   = pnlToday?.best_strategy ?? null
+  const winRate   = pnlToday?.win_rate_today ?? null
+  const bestStrat = pnlToday?.best_strategy  ?? null
 
   return (
     <main className="min-h-screen">
@@ -328,15 +358,231 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* ── Section H: Quip Placeholder ─────────────────────────────────────── */}
-      <div className="px-4 pb-3">
-        <div className="border border-dashed border-[#2a3548] rounded-lg p-4 flex items-center justify-between">
-          <div>
-            <p className="text-xs font-bold text-[#4a5568] uppercase tracking-wide">Quip Fundamental Analysis</p>
-            <p className="text-[10px] text-[#4a5568] mt-1">AI fundamental analysis integration — coming soon</p>
+      {/* ── Section M: Market Scoreboard ────────────────────────────────────── */}
+      <div className="px-4 pb-4">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            <h2 className="text-sm font-bold text-[#d8e3fb] uppercase tracking-wide">
+              Market Scoreboard
+            </h2>
+            {marketScan && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] px-2 py-0.5 rounded bg-[#00d4aa]/10 text-[#00d4aa] border border-[#00d4aa]/20">
+                  {marketScan.total_bullish} Bullish
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded bg-[#ffb4ab]/10 text-[#ffb4ab] border border-[#ffb4ab]/20">
+                  {marketScan.total_bearish} Bearish
+                </span>
+                <span className="text-[10px] text-[#4a5568]">
+                  {marketScan.scan_time
+                    ? `Updated ${new Date(marketScan.scan_time).toLocaleTimeString('en-IN')}`
+                    : ''}
+                </span>
+              </div>
+            )}
           </div>
-          <span className="material-symbols-outlined text-[#2a3548] text-[32px]">psychology</span>
+          <button
+            onClick={loadMarketScan}
+            disabled={scanLoading}
+            className="text-[10px] text-[#4a5568] hover:text-[#00d4aa] flex items-center gap-1 transition-colors disabled:opacity-50 shrink-0"
+          >
+            <span className={`material-symbols-outlined text-[12px] ${scanLoading ? 'animate-spin' : ''}`}>refresh</span>
+            Refresh
+          </button>
         </div>
+
+        {/* Filter row */}
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
+          {/* Index filter */}
+          <div className="flex rounded overflow-hidden border border-[#2a3548]">
+            {['ALL', 'NIFTY50', 'BANKNIFTY'].map(f => (
+              <button
+                key={f}
+                onClick={() => setIndexFilter(f)}
+                className={`px-3 py-1 text-[10px] font-bold transition-colors ${
+                  indexFilter === f
+                    ? 'bg-[#00d4aa] text-[#005643]'
+                    : 'text-[#bacac2] hover:text-[#d8e3fb] bg-[#0d1829]'
+                }`}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
+
+          {/* Signal filter */}
+          <div className="flex rounded overflow-hidden border border-[#2a3548]">
+            {['ALL', 'BUY', 'NEUTRAL', 'SELL'].map(f => (
+              <button
+                key={f}
+                onClick={() => setScoreFilter(f)}
+                className={`px-3 py-1 text-[10px] font-bold transition-colors ${
+                  scoreFilter === f
+                    ? 'bg-[#1e293b] text-[#d8e3fb]'
+                    : 'text-[#bacac2] hover:text-[#d8e3fb] bg-[#0d1829]'
+                }`}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
+
+          {/* Sector filter */}
+          <select
+            value={sectorFilter}
+            onChange={e => setSectorFilter(e.target.value)}
+            className="bg-[#111c2d] border border-[#2a3548] rounded px-2 py-1 text-[10px] text-[#bacac2] outline-none focus:border-[#00d4aa]"
+          >
+            {SCOREBOARD_SECTORS.map(s => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+
+          {/* Reset filters */}
+          {(indexFilter !== 'ALL' || scoreFilter !== 'ALL' || sectorFilter !== 'ALL') && (
+            <button
+              onClick={() => { setIndexFilter('ALL'); setScoreFilter('ALL'); setSectorFilter('ALL') }}
+              className="text-[10px] text-[#bacac2] hover:text-[#ffb4ab] flex items-center gap-0.5 transition-colors"
+            >
+              <span className="material-symbols-outlined text-[12px]">cancel</span>
+              Reset
+            </button>
+          )}
+        </div>
+
+        {/* Scoreboard table */}
+        {scanLoading ? (
+          <div className="flex flex-col gap-1.5">
+            {Array(8).fill(0).map((_, i) => (
+              <Skeleton key={i} className="h-10" />
+            ))}
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-xl border border-[#1e293b]">
+            {/* Table header */}
+            <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-[#0d1829] text-[9px] font-bold text-[#4a5568] uppercase tracking-wider">
+              <div className="col-span-2">Symbol</div>
+              <div className="col-span-1">Idx</div>
+              <div className="col-span-2">Sector</div>
+              <div className="col-span-1 text-right">Price</div>
+              <div className="col-span-1 text-right">Chg%</div>
+              <div className="col-span-2">Score</div>
+              <div className="col-span-1 text-center">Signal</div>
+              <div className="col-span-1 text-center">RSI</div>
+              <div className="col-span-1 text-center">Vol</div>
+            </div>
+
+            {/* Table rows */}
+            <div className="divide-y divide-[#0d1829] max-h-[480px] overflow-y-auto">
+              {scoreboardRows.length === 0 ? (
+                <div className="py-8 text-center text-[#4a5568] text-sm">
+                  {marketScan
+                    ? 'No stocks match the selected filters'
+                    : 'Market scan data unavailable — click Refresh to load'}
+                </div>
+              ) : (
+                scoreboardRows.map((stock, i) => {
+                  const scoreColor = stock.technical_score >= 65
+                    ? '#00d4aa'
+                    : stock.technical_score >= 50
+                    ? '#ffa858'
+                    : '#ffb4ab'
+                  return (
+                    <div
+                      key={stock.symbol}
+                      onClick={() => navigate(`/intelligence/${stock.symbol}`)}
+                      className="grid grid-cols-12 gap-2 px-3 py-2.5 cursor-pointer hover:bg-[#111c2d] transition-colors items-center group"
+                    >
+                      {/* Rank + Symbol */}
+                      <div className="col-span-2 flex items-center gap-1.5">
+                        <span className="text-[9px] text-[#4a5568] w-4 text-right font-mono shrink-0">
+                          {i + 1}
+                        </span>
+                        <span className="text-[11px] font-bold font-mono text-[#d8e3fb] group-hover:text-[#00d4aa] transition-colors truncate">
+                          {stock.symbol}
+                        </span>
+                      </div>
+
+                      {/* Index */}
+                      <div className="col-span-1">
+                        <span className="text-[8px] font-bold text-[#4a5568]">
+                          {stock.index === 'BANKNIFTY' ? 'BNF' : 'N50'}
+                        </span>
+                      </div>
+
+                      {/* Sector */}
+                      <div className="col-span-2">
+                        <span className="text-[9px] text-[#4a5568] truncate block">{stock.sector}</span>
+                      </div>
+
+                      {/* Price */}
+                      <div className="col-span-1 text-right">
+                        <span className="text-[10px] font-mono text-[#d8e3fb]">
+                          ₹{stock.ltp ? stock.ltp.toFixed(0) : '—'}
+                        </span>
+                      </div>
+
+                      {/* Change % */}
+                      <div className="col-span-1 text-right">
+                        <span className={`text-[10px] font-mono font-bold ${
+                          stock.change_pct >= 0 ? 'text-[#00d4aa]' : 'text-[#ffb4ab]'
+                        }`}>
+                          {stock.change_pct >= 0 ? '+' : ''}
+                          {stock.change_pct ? stock.change_pct.toFixed(2) : '0.00'}%
+                        </span>
+                      </div>
+
+                      {/* Score bar */}
+                      <div className="col-span-2 flex items-center gap-1.5">
+                        <div className="flex-1 h-1.5 bg-[#0d1829] rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full"
+                            style={{ width: `${stock.technical_score}%`, background: scoreColor }}
+                          />
+                        </div>
+                        <span className="text-[9px] font-mono w-6 shrink-0" style={{ color: scoreColor }}>
+                          {stock.technical_score}
+                        </span>
+                      </div>
+
+                      {/* Signal badge */}
+                      <div className="col-span-1 flex justify-center">
+                        <span className={`text-[8px] font-bold px-1 py-0.5 rounded ${
+                          stock.signal === 'BUY'  ? 'bg-[#00d4aa]/15 text-[#00d4aa]'
+                          : stock.signal === 'SELL' ? 'bg-[#ffb4ab]/15 text-[#ffb4ab]'
+                          : 'bg-[#1e293b] text-[#4a5568]'
+                        }`}>
+                          {stock.signal}
+                        </span>
+                      </div>
+
+                      {/* RSI */}
+                      <div className="col-span-1 text-center">
+                        <span className={`text-[9px] font-mono ${
+                          stock.rsi < 35 ? 'text-[#00d4aa]'
+                          : stock.rsi > 65 ? 'text-[#ffb4ab]'
+                          : 'text-[#bacac2]'
+                        }`}>
+                          {stock.rsi ? stock.rsi.toFixed(0) : '—'}
+                        </span>
+                      </div>
+
+                      {/* Volume ratio */}
+                      <div className="col-span-1 text-center">
+                        <span className={`text-[9px] font-mono ${
+                          stock.volume_ratio >= 1.5 ? 'text-[#ffa858]' : 'text-[#4a5568]'
+                        }`}>
+                          {stock.volume_ratio ? stock.volume_ratio.toFixed(1) : '—'}x
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── Section C+D: Search + Filters (sticky) ──────────────────────────── */}
@@ -500,7 +746,6 @@ export default function Dashboard() {
 
             {pnlToday ? (
               <>
-                {/* Primary 4-stat grid */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
                   <div className="flex flex-col items-center bg-[#081425] rounded p-3">
                     <span className="text-[9px] uppercase text-[#bacac2] mb-1">Today's P&L</span>
@@ -526,7 +771,6 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                {/* Secondary stats row: win rate + best strategy */}
                 <div className="grid grid-cols-2 gap-3">
                   {winRate !== null && (
                     <div className="bg-[#081425] rounded p-3 flex items-center gap-3">
@@ -541,9 +785,14 @@ export default function Dashboard() {
                           </span>
                         </div>
                       </div>
-                      <div className="w-10 h-10 rounded-full border-2 flex items-center justify-center shrink-0"
-                        style={{ borderColor: winRate >= 60 ? '#46f1c5' : winRate >= 40 ? '#ffa858' : '#ffb4ab' }}>
-                        <span className="text-[10px] font-bold" style={{ color: winRate >= 60 ? '#46f1c5' : winRate >= 40 ? '#ffa858' : '#ffb4ab' }}>
+                      <div
+                        className="w-10 h-10 rounded-full border-2 flex items-center justify-center shrink-0"
+                        style={{ borderColor: winRate >= 60 ? '#46f1c5' : winRate >= 40 ? '#ffa858' : '#ffb4ab' }}
+                      >
+                        <span
+                          className="text-[10px] font-bold"
+                          style={{ color: winRate >= 60 ? '#46f1c5' : winRate >= 40 ? '#ffa858' : '#ffb4ab' }}
+                        >
                           {winRate.toFixed(0)}
                         </span>
                       </div>
