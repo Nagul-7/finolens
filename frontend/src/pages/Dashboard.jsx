@@ -1,23 +1,26 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getWatchlist, getWatchlistQuotes, getScreener, getIndex, getAlgoPnlToday } from '../api/index.js'
+import {
+  getWatchlist, getWatchlistQuotes, getScreener, getIndex,
+  getAlgoPnlToday, getAlgoAlignments,
+} from '../api/index.js'
 
 function Skeleton({ className = '' }) {
   return <div className={`animate-pulse bg-[#1f2a3c] rounded ${className}`} />
 }
 
 const SIG_STYLE = {
-  'STRONG BUY': 'text-[#00d4aa] bg-[#00d4aa]/15 border-[#00d4aa]/40',
-  'BUY':        'text-[#46f1c5] bg-[#46f1c5]/10 border-[#46f1c5]/30',
-  'NEUTRAL':    'text-[#ffa858] bg-[#ffa858]/10 border-[#ffa858]/30',
-  'SELL':       'text-[#ffb4ab] bg-[#ffb4ab]/15 border-[#ffb4ab]/40',
-  'STRONG SELL':'text-[#ffb4ab] bg-[#ffb4ab]/20 border-[#ffb4ab]/50',
+  'STRONG BUY':   'text-[#00d4aa] bg-[#00d4aa]/15 border-[#00d4aa]/40',
+  'BUY':          'text-[#46f1c5] bg-[#46f1c5]/10 border-[#46f1c5]/30',
+  'NEUTRAL':      'text-[#ffa858] bg-[#ffa858]/10 border-[#ffa858]/30',
+  'SELL':         'text-[#ffb4ab] bg-[#ffb4ab]/15 border-[#ffb4ab]/40',
+  'STRONG SELL':  'text-[#ffb4ab] bg-[#ffb4ab]/20 border-[#ffb4ab]/50',
+  'ALGO SIGNAL':  'text-[#00d4aa] bg-[#00d4aa]/15 border-[#00d4aa]/40',
 }
 
 function StockCard({ item, onClick, onChartClick }) {
-  const navigate = useNavigate()
-  const pos = (item.change_pct ?? 0) >= 0
-  const sig = item.signal ?? 'NEUTRAL'
+  const pos    = (item.change_pct ?? 0) >= 0
+  const sig    = item.signal ?? 'NEUTRAL'
   const sigCls = SIG_STYLE[sig] ?? SIG_STYLE['NEUTRAL']
 
   return (
@@ -57,12 +60,12 @@ function StockCard({ item, onClick, onChartClick }) {
   )
 }
 
-// Compact horizontal card for Today's Picks
+// Compact horizontal card for Today's Picks — shows strategy_name when present
 function PickCard({ item, onClick }) {
-  const pos = (item.change_pct ?? 0) >= 0
-  const sig = item.signal ?? 'NEUTRAL'
-  const sigCls = SIG_STYLE[sig] ?? SIG_STYLE['NEUTRAL']
-  const score = item.score ?? 0
+  const pos      = (item.change_pct ?? 0) >= 0
+  const sig      = item.signal ?? 'NEUTRAL'
+  const sigCls   = SIG_STYLE[sig] ?? SIG_STYLE['NEUTRAL']
+  const score    = item.score ?? 0
   const scoreColor = score >= 70 ? '#00d4aa' : score >= 50 ? '#ffa858' : '#ffb4ab'
 
   return (
@@ -75,7 +78,11 @@ function PickCard({ item, onClick }) {
           <span className="font-mono font-bold text-[#d8e3fb] text-sm">{item.symbol}</span>
           <span className={`border px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wide shrink-0 ${sigCls}`}>{sig}</span>
         </div>
-        <span className="text-[10px] text-[#bacac2] truncate block">{item.sector ?? 'NSE:EQ'}</span>
+        {item.strategy_name ? (
+          <span className="text-[10px] text-[#00d4aa] truncate block">{item.strategy_name}</span>
+        ) : (
+          <span className="text-[10px] text-[#bacac2] truncate block">{item.sector ?? 'NSE:EQ'}</span>
+        )}
         {/* Score bar */}
         <div className="mt-1.5 flex items-center gap-2">
           <div className="flex-1 bg-[#2a3548] rounded-full h-1">
@@ -99,36 +106,35 @@ function PickCard({ item, onClick }) {
 }
 
 const FILTER_SIGNALS = ['BUY', 'NEUTRAL', 'SELL']
-const SECTORS = ['All', 'Banking', 'Information Tech', 'Automobiles', 'Pharma', 'Finance', 'FMCG', 'Energy', 'Metals']
-const SCORE_PRESETS = [{ label: 'Any', min: 0 }, { label: '>50', min: 50 }, { label: '>65', min: 65 }, { label: '>75', min: 75 }]
+const SECTORS        = ['All', 'Banking', 'Information Tech', 'Automobiles', 'Pharma', 'Finance', 'FMCG', 'Energy', 'Metals']
+const SCORE_PRESETS  = [{ label: 'Any', min: 0 }, { label: '>50', min: 50 }, { label: '>65', min: 65 }, { label: '>75', min: 75 }]
 
 export default function Dashboard() {
   const navigate = useNavigate()
-  const [allStocks, setAllStocks]       = useState([])
+  const [allStocks,    setAllStocks]    = useState([])
   const [watchSymbols, setWatchSymbols] = useState([])
-  const [indexData, setIndexData]       = useState(null)
-  const [pnlToday, setPnlToday]         = useState(null)
-  const [loading, setLoading]           = useState(true)
-  const [error, setError]               = useState(null)
+  const [indexData,    setIndexData]    = useState(null)
+  const [pnlToday,     setPnlToday]     = useState(null)
+  const [alignments,   setAlignments]   = useState([])
+  const [loading,      setLoading]      = useState(true)
+  const [error,        setError]        = useState(null)
 
-  // Search
-  const [query, setQuery] = useState('')
-
-  // Filters
-  const [filtersOpen, setFiltersOpen]   = useState(false)
-  const [sigFilters, setSigFilters]     = useState({ BUY: true, NEUTRAL: true, SELL: true })
-  const [sector, setSector]             = useState('All')
-  const [minScore, setMinScore]         = useState(0)
+  const [query,       setQuery]       = useState('')
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [sigFilters,  setSigFilters]  = useState({ BUY: true, NEUTRAL: true, SELL: true })
+  const [sector,      setSector]      = useState('All')
+  const [minScore,    setMinScore]    = useState(0)
 
   const load = useCallback(async () => {
     setError(null)
     try {
-      const [wRes, screenerRes, quotesRes, indexRes, pnlRes] = await Promise.allSettled([
+      const [wRes, screenerRes, quotesRes, indexRes, pnlRes, alignRes] = await Promise.allSettled([
         getWatchlist(),
         getScreener({}),
         getWatchlistQuotes(),
         getIndex(),
         getAlgoPnlToday(),
+        getAlgoAlignments(),
       ])
 
       const rawSymbols = (wRes.status === 'fulfilled' ? wRes.value.data ?? [] : [])
@@ -136,11 +142,11 @@ export default function Dashboard() {
       setWatchSymbols(rawSymbols)
 
       const screenerData = screenerRes.status === 'fulfilled' ? (screenerRes.value.data ?? []) : []
-      const screenerMap = {}
+      const screenerMap  = {}
       for (const s of screenerData) screenerMap[s.symbol] = s
 
       const quotesData = quotesRes.status === 'fulfilled' ? (quotesRes.value.data ?? []) : []
-      const quotesMap = {}
+      const quotesMap  = {}
       for (const q of quotesData) quotesMap[q.symbol] = q
 
       const merged = screenerData.map(s => ({
@@ -157,6 +163,17 @@ export default function Dashboard() {
 
       if (indexRes.status === 'fulfilled') setIndexData(indexRes.value.data ?? null)
       if (pnlRes.status === 'fulfilled')   setPnlToday(pnlRes.value.data ?? null)
+
+      if (alignRes.status === 'fulfilled') {
+        const rawAlign = alignRes.value.data?.alignments ?? []
+        // Enrich alignment entries with live quote data
+        const enriched = rawAlign.map(a => ({
+          ...a,
+          ltp:        quotesMap[a.symbol]?.ltp        ?? a.current_price ?? null,
+          change_pct: quotesMap[a.symbol]?.change_pct ?? 0,
+        }))
+        setAlignments(enriched)
+      }
     } catch (e) {
       console.error('Dashboard load error', e)
       setError('Failed to load data.')
@@ -171,18 +188,49 @@ export default function Dashboard() {
     return () => clearInterval(id)
   }, [load])
 
-  // Today's picks: BUY/STRONG BUY, score > 60, top 6
-  const topOpportunities = useMemo(() =>
-    allStocks
-      .filter(s => (s.signal === 'BUY' || s.signal === 'STRONG BUY') && (s.score ?? 0) > 60)
+  // Today's picks: merge screener BUY signals with algo alignment results
+  const topOpportunities = useMemo(() => {
+    const buySet = new Set()
+    const picks  = []
+
+    // Screener BUY/STRONG BUY with score > 60
+    for (const s of allStocks) {
+      if ((s.signal === 'BUY' || s.signal === 'STRONG BUY') && (s.score ?? 0) > 60) {
+        buySet.add(s.symbol)
+        picks.push(s)
+      }
+    }
+
+    // Algo alignment results with score >= 65 — skip if already from screener
+    for (const a of alignments) {
+      if ((a.score ?? 0) < 65) continue
+      if (buySet.has(a.symbol)) {
+        // Enrich existing pick with strategy name
+        const existing = picks.find(p => p.symbol === a.symbol)
+        if (existing && !existing.strategy_name) existing.strategy_name = a.strategy_name
+        continue
+      }
+      buySet.add(a.symbol)
+      picks.push({
+        symbol:        a.symbol,
+        signal:        'ALGO SIGNAL',
+        score:         a.score,
+        strategy_name: a.strategy_name,
+        ltp:           a.ltp ?? null,
+        change_pct:    a.change_pct ?? 0,
+        sector:        null,
+      })
+    }
+
+    return picks
       .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-      .slice(0, 6),
-  [allStocks])
+      .slice(0, 6)
+  }, [allStocks, alignments])
 
   // Watchlist display with filters
   const displayList = useMemo(() => {
-    const q = query.trim().toUpperCase()
-    let base = q
+    const q    = query.trim().toUpperCase()
+    let base   = q
       ? allStocks.filter(s => s.symbol.includes(q) || (s.sector ?? '').toUpperCase().includes(q))
       : allStocks.filter(s => watchSymbols.includes(s.symbol))
 
@@ -212,17 +260,19 @@ export default function Dashboard() {
     setMinScore(0)
   }
 
-  // Market overview helpers
   const fmtIdx = (val, pct) => {
     if (val == null) return { price: '—', change: '', pos: true }
     return {
-      price: val.toLocaleString('en-IN'),
+      price:  val.toLocaleString('en-IN'),
       change: `${pct >= 0 ? '+' : ''}${pct?.toFixed(2)}%`,
-      pos: (pct ?? 0) >= 0,
+      pos:    (pct ?? 0) >= 0,
     }
   }
-  const nifty    = fmtIdx(indexData?.nifty?.ltp,     indexData?.nifty?.change_pct)
+  const nifty     = fmtIdx(indexData?.nifty?.ltp,     indexData?.nifty?.change_pct)
   const banknifty = fmtIdx(indexData?.banknifty?.ltp, indexData?.banknifty?.change_pct)
+
+  const winRate     = pnlToday?.win_rate_today ?? null
+  const bestStrat   = pnlToday?.best_strategy ?? null
 
   return (
     <main className="min-h-screen">
@@ -253,6 +303,9 @@ export default function Dashboard() {
         <div className="text-[10px] font-bold uppercase tracking-widest text-[#bacac2] mb-2 flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-[#00d4aa] animate-pulse" />
           TODAY'S PICKS — BULLISH OPPORTUNITIES
+          {alignments.length > 0 && (
+            <span className="text-[#00d4aa] font-bold">&amp; STRATEGY ALIGNMENTS</span>
+          )}
         </div>
         {loading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -260,7 +313,7 @@ export default function Dashboard() {
           </div>
         ) : topOpportunities.length === 0 ? (
           <div className="py-4 text-center text-[#4a5568] text-xs border border-dashed border-[#2a3548] rounded-lg">
-            No strong BUY signals in screener — market may be consolidating
+            No strong BUY signals or strategy alignments — market may be consolidating
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -341,7 +394,7 @@ export default function Dashboard() {
                   onClick={() => setSigFilters(p => ({ ...p, [s]: !p[s] }))}
                   className={`px-2.5 py-0.5 rounded text-[10px] font-bold border transition-colors ${
                     sigFilters[s]
-                      ? s === 'BUY' ? 'bg-[#46f1c5]/10 border-[#46f1c5]/40 text-[#46f1c5]'
+                      ? s === 'BUY'  ? 'bg-[#46f1c5]/10 border-[#46f1c5]/40 text-[#46f1c5]'
                         : s === 'SELL' ? 'bg-[#ffb4ab]/10 border-[#ffb4ab]/40 text-[#ffb4ab]'
                         : 'bg-[#ffa858]/10 border-[#ffa858]/40 text-[#ffa858]'
                       : 'bg-[#1f2a3c] border-[#2a3548] text-[#4a5568] line-through'
@@ -444,31 +497,71 @@ export default function Dashboard() {
               <span className="material-symbols-outlined text-[14px] text-[#ffa858]">precision_manufacturing</span>
               ALGO PERFORMANCE — TODAY
             </div>
+
             {pnlToday ? (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="flex flex-col items-center bg-[#081425] rounded p-3">
-                  <span className="text-[9px] uppercase text-[#bacac2] mb-1">Today's P&L</span>
-                  <span className={`font-mono text-lg font-bold ${(pnlToday.total_pnl ?? 0) >= 0 ? 'text-[#46f1c5]' : 'text-[#ffb4ab]'}`}>
-                    {(pnlToday.total_pnl ?? 0) >= 0 ? '+' : ''}₹{Math.abs(pnlToday.total_pnl ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                  </span>
+              <>
+                {/* Primary 4-stat grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+                  <div className="flex flex-col items-center bg-[#081425] rounded p-3">
+                    <span className="text-[9px] uppercase text-[#bacac2] mb-1">Today's P&L</span>
+                    <span className={`font-mono text-lg font-bold ${(pnlToday.total_pnl ?? 0) >= 0 ? 'text-[#46f1c5]' : 'text-[#ffb4ab]'}`}>
+                      {(pnlToday.total_pnl ?? 0) >= 0 ? '+' : ''}₹{Math.abs(pnlToday.total_pnl ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                    </span>
+                  </div>
+                  <div className="flex flex-col items-center bg-[#081425] rounded p-3">
+                    <span className="text-[9px] uppercase text-[#bacac2] mb-1">Trades Today</span>
+                    <span className="font-mono text-lg font-bold text-[#d8e3fb]">{pnlToday.trades_today ?? 0}</span>
+                  </div>
+                  <div className="flex flex-col items-center bg-[#081425] rounded p-3">
+                    <span className="text-[9px] uppercase text-[#bacac2] mb-1">Realized</span>
+                    <span className={`font-mono text-lg font-bold ${(pnlToday.realized_pnl ?? 0) >= 0 ? 'text-[#46f1c5]' : 'text-[#ffb4ab]'}`}>
+                      ₹{(pnlToday.realized_pnl ?? 0).toFixed(0)}
+                    </span>
+                  </div>
+                  <div className="flex flex-col items-center bg-[#081425] rounded p-3">
+                    <span className="text-[9px] uppercase text-[#bacac2] mb-1">Unrealized</span>
+                    <span className={`font-mono text-lg font-bold ${(pnlToday.unrealized_pnl ?? 0) >= 0 ? 'text-[#00d4aa]' : 'text-[#ffa858]'}`}>
+                      ₹{(pnlToday.unrealized_pnl ?? 0).toFixed(0)}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex flex-col items-center bg-[#081425] rounded p-3">
-                  <span className="text-[9px] uppercase text-[#bacac2] mb-1">Trades Today</span>
-                  <span className="font-mono text-lg font-bold text-[#d8e3fb]">{pnlToday.trades_today ?? 0}</span>
+
+                {/* Secondary stats row: win rate + best strategy */}
+                <div className="grid grid-cols-2 gap-3">
+                  {winRate !== null && (
+                    <div className="bg-[#081425] rounded p-3 flex items-center gap-3">
+                      <div className="flex-1">
+                        <div className="text-[9px] uppercase text-[#bacac2] mb-1">Win Rate Today</div>
+                        <div className="flex items-center gap-2">
+                          <span className={`font-mono text-base font-bold ${winRate >= 60 ? 'text-[#46f1c5]' : winRate >= 40 ? 'text-[#ffa858]' : 'text-[#ffb4ab]'}`}>
+                            {winRate.toFixed(0)}%
+                          </span>
+                          <span className="text-[10px] text-[#bacac2]">
+                            {pnlToday.winning_trades ?? 0}W / {pnlToday.losing_trades ?? 0}L
+                          </span>
+                        </div>
+                      </div>
+                      <div className="w-10 h-10 rounded-full border-2 flex items-center justify-center shrink-0"
+                        style={{ borderColor: winRate >= 60 ? '#46f1c5' : winRate >= 40 ? '#ffa858' : '#ffb4ab' }}>
+                        <span className="text-[10px] font-bold" style={{ color: winRate >= 60 ? '#46f1c5' : winRate >= 40 ? '#ffa858' : '#ffb4ab' }}>
+                          {winRate.toFixed(0)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  {bestStrat && (
+                    <div className="bg-[#081425] rounded p-3">
+                      <div className="text-[9px] uppercase text-[#bacac2] mb-1">Best Strategy</div>
+                      <div className="font-mono text-xs font-bold text-[#00d4aa] truncate">{bestStrat.name}</div>
+                      {bestStrat.pnl != null && (
+                        <div className={`font-mono text-sm font-bold mt-0.5 ${bestStrat.pnl >= 0 ? 'text-[#46f1c5]' : 'text-[#ffb4ab]'}`}>
+                          {bestStrat.pnl >= 0 ? '+' : ''}₹{Math.abs(bestStrat.pnl).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-                <div className="flex flex-col items-center bg-[#081425] rounded p-3">
-                  <span className="text-[9px] uppercase text-[#bacac2] mb-1">Realized</span>
-                  <span className={`font-mono text-lg font-bold ${(pnlToday.realized_pnl ?? 0) >= 0 ? 'text-[#46f1c5]' : 'text-[#ffb4ab]'}`}>
-                    ₹{(pnlToday.realized_pnl ?? 0).toFixed(0)}
-                  </span>
-                </div>
-                <div className="flex flex-col items-center bg-[#081425] rounded p-3">
-                  <span className="text-[9px] uppercase text-[#bacac2] mb-1">Unrealized</span>
-                  <span className={`font-mono text-lg font-bold ${(pnlToday.unrealized_pnl ?? 0) >= 0 ? 'text-[#00d4aa]' : 'text-[#ffa858]'}`}>
-                    ₹{(pnlToday.unrealized_pnl ?? 0).toFixed(0)}
-                  </span>
-                </div>
-              </div>
+              </>
             ) : (
               <p className="text-[#4a5568] text-xs text-center py-2">No trades today</p>
             )}

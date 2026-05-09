@@ -27,4 +27,12 @@ export const getAlgoTradesHistory   = ()             => api.get('/algo/trades/hi
 export const getAlgoLogs            = ()             => api.get('/algo/logs')
 export const placeManualTrade       = (data)          => api.post('/algo/paper-trade', data)
 export const getAlertHistory        = ()             => api.get('/alerts/history')
+export const getAlgoRegistry        = ()             => api.get('/algo/strategies')
+export const getAlgoAlignments      = ()             => api.get('/algo/alignments')
+export const triggerAlgoScan        = ()             => api.post('/algo/scan-now')
+export const getStrategyInfo        = (id)            => api.get(`/algo/strategy/${id}/info`)
+export const activateStrategy       = (id, data)      => api.post(`/algo/strategy/${id}/activate`, data)
+export const deactivateStrategy     = (id)            => api.post(`/algo/strategy/${id}/deactivate`)
+export const getAlgoPerformance     = ()             => api.get('/algo/performance/summary')
+export const getBrokerStatus        = ()             => api.get('/broker/status')
 
