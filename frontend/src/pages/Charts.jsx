@@ -746,9 +746,9 @@ function SubPanel({ ind, ohlcv, onRemove }) {
 
 // ─── Main Charts Page ─────────────────────────────────────────────────────────
 export default function Charts() {
-  const [symbol,    setSymbol]    = useState(() => sessionStorage.getItem('charts_symbol') || '')
-  const [inputVal,  setInputVal]  = useState(() => sessionStorage.getItem('charts_symbol') || '')
-  const [timeframe, setTimeframe] = useState(() => sessionStorage.getItem('charts_tf')     || '3M')
+  const [symbol,    setSymbol]    = useState(() => localStorage.getItem('charts_symbol') || '')
+  const [inputVal,  setInputVal]  = useState(() => localStorage.getItem('charts_symbol') || '')
+  const [timeframe, setTimeframe] = useState(() => localStorage.getItem('charts_tf')     || '3M')
   const [ohlcv,     setOhlcv]     = useState([])
   const [loading,   setLoading]   = useState(true)
 
@@ -757,7 +757,7 @@ export default function Charts() {
   const [pendingIndType, setPendingIndType] = useState(null)
   const [indicators, setIndicators] = useState(() => {
     try {
-      const saved = sessionStorage.getItem('charts_indicators')
+      const saved = localStorage.getItem('charts_indicators')
       return saved ? JSON.parse(saved) : []
     } catch {
       return []
@@ -779,10 +779,10 @@ export default function Charts() {
   useEffect(() => { drawingsRef.current   = drawings   }, [drawings])
   useEffect(() => { selectedIdRef.current = selectedId }, [selectedId])
 
-  // Persist indicators to sessionStorage whenever they change
+  // Persist indicators to localStorage whenever they change
   useEffect(() => {
     try {
-      sessionStorage.setItem('charts_indicators', JSON.stringify(indicators))
+      localStorage.setItem('charts_indicators', JSON.stringify(indicators))
     } catch {}
   }, [indicators])
 
@@ -920,7 +920,7 @@ export default function Charts() {
   const applySymbol = () => {
     const s = inputVal.trim().toUpperCase()
     if (s && s !== symbol) {
-      sessionStorage.setItem('charts_symbol', s)
+      localStorage.setItem('charts_symbol', s)
       setSymbol(s)
     }
   }
@@ -950,7 +950,7 @@ export default function Charts() {
   }
 
   const handleTfChange = (tf) => {
-    sessionStorage.setItem('charts_tf', tf)
+    localStorage.setItem('charts_tf', tf)
     setTimeframe(tf)
   }
 

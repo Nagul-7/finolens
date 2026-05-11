@@ -870,7 +870,11 @@ async function scanStockAlignment() {
       if (!dailyBars || dailyBars.length < 30) continue;
 
       for (const strategy of STRATEGY_REGISTRY) {
-        if (strategy.status !== "ACTIVE") continue;
+        // Check if the user has toggled this strategy ON in _strategies
+        const userStrategy = _strategies.find(
+          s => s.strategy_type === strategy.id && s.status === "ACTIVE"
+        );
+        if (!userStrategy) continue;
 
         const aligned = checkStrategyAlignment(strategy, dailyBars, weeklyBars, symbol);
 
@@ -1132,7 +1136,7 @@ const algoEngine = {
         if (!dailyBars || dailyBars.length < 50) continue;
 
         const aligned = checkStrategyAlignment(regEntry, dailyBars, weeklyBars, symbol);
-        if (aligned.score < 65) continue;
+        if (aligned.score < 55) continue;
 
         const ltp = parseFloat(dailyBars[dailyBars.length - 1].close);
         if (!ltp || ltp <= 0) continue;
@@ -1239,6 +1243,8 @@ const algoEngine = {
 
   // ── Public accessors (used by algo.js routes) ──────────────────────────────
   getStrategies()          { return _strategies; },
+  getUserStrategies()      { return _strategies; },
+
   getOpenPositions()       { return _openPositions; },
   getClosedTrades()        { return _closedTrades; },
   getTradeHistory()        { return _closedTrades; },

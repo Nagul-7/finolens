@@ -258,6 +258,9 @@ function AlignmentCard({ alignment, onActivate }) {
   )
 }
 
+// Total stocks in the backend SCAN_UNIVERSE (keep in sync with algoEngine.js)
+const SCAN_UNIVERSE_SIZE = 52
+
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function Algo() {
   const navigate = useNavigate()
@@ -273,6 +276,7 @@ export default function Algo() {
   const [loading,       setLoading]       = useState(true)
   const [scanning,      setScanning]      = useState(false)
   const [lastScan,      setLastScan]      = useState(null)
+  const [minScore,      setMinScore]      = useState(50)
 
   const [toast,         setToast]         = useState({ msg: '', type: 'info' })
   const [detailStrat,   setDetailStrat]   = useState(null)   // drawer open
@@ -448,12 +452,25 @@ export default function Algo() {
   const handleScanNow = async () => {
     setScanning(true)
     try {
-      const r = await triggerAlgoScan()
-      setAlignments(r.data?.alignments ?? [])
-      setLastScan(r.data?.scanned_at ?? new Date().toISOString())
-      showToast(`Scan complete — ${r.data?.total ?? 0} alignments found`)
-    } catch { showToast('Scan failed — ML service may be busy', 'error') }
-    finally { setScanning(false) }
+      const resp = await fetch('http://localhost:5000/api/algo/scan-now', {
+        method: 'POST',
+        signal: AbortSignal.timeout(120_000),
+      })
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+      const data = await resp.json()
+      setAlignments(data?.alignments ?? [])
+      setLastScan(data?.scanned_at ?? new Date().toISOString())
+      showToast(`Scan complete — ${data?.total ?? 0} alignments found`)
+    } catch (err) {
+      showToast(
+        err?.name === 'TimeoutError'
+          ? 'Scan timed out after 120 s — results may be partial'
+          : 'Scan failed — ML service may be busy',
+        'error'
+      )
+    } finally {
+      setScanning(false)
+    }
   }
 
   const handleStopAll = async () => {
@@ -495,6 +512,9 @@ export default function Algo() {
   }
 
   const totalPnl = pnlToday?.total_pnl ?? positions.reduce((s, p) => s + (p.pnl ?? 0), 0)
+
+  // Filtered alignments for display
+  const filteredAlignments = (alignments || []).filter(a => a.alignment_score >= minScore)
 
   // ── render ────────────────────────────────────────────────────────────────
   return (
@@ -671,7 +691,9 @@ export default function Algo() {
               <div className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#00d4aa] animate-pulse" />
                 <h2 className="text-[10px] font-bold uppercase text-[#d8e3fb]">Today's Alignment Scan</h2>
-                <span className="text-[9px] text-[#4a5568]">{alignments.length} found</span>
+                <span className="text-[9px] text-[#4a5568]">
+                  {filteredAlignments.length}/{alignments.length} shown
+                </span>
               </div>
               <button
                 onClick={handleScanNow}
@@ -684,20 +706,57 @@ export default function Algo() {
                 {scanning ? 'Scanning…' : 'Scan Now'}
               </button>
             </div>
-            {lastScan && (
-              <div className="px-3 py-1 text-[9px] text-[#4a5568] border-b border-[#2a3548] shrink-0">
-                Last scan: {new Date(lastScan).toLocaleTimeString('en-IN')}
+            {/* Score filter + last-scan row */}
+            <div className="px-3 py-1.5 border-b border-[#2a3548] flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[9px] text-[#4a5568] uppercase">Min score:</span>
+                {[40, 50, 60, 70].map(s => (
+                  <button key={s}
+                    onClick={() => setMinScore(s)}
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors ${
+                      minScore === s
+                        ? 'bg-[#00d4aa]/20 border-[#00d4aa]/40 text-[#00d4aa]'
+                        : 'border-[#2a3548] text-[#4a5568] hover:text-[#bacac2]'
+                    }`}>
+                    {s}+
+                  </button>
+                ))}
               </div>
-            )}
+              {lastScan && (
+                <span className="text-[9px] text-[#4a5568]">
+                  Last scan: {new Date(lastScan).toLocaleTimeString('en-IN')}
+                </span>
+              )}
+            </div>
 
             <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-2">
-              {alignments.length === 0 ? (
+              {scanning ? (
+                <div className="flex items-center gap-3 py-8 justify-center text-[#bacac2]">
+                  <div className="w-4 h-4 border-2 border-[#00d4aa] border-t-transparent rounded-full animate-spin" />
+                  <span className="text-sm">
+                    Scanning {SCAN_UNIVERSE_SIZE}+ stocks for strategy alignment…
+                    This takes 60–90 seconds.
+                  </span>
+                </div>
+              ) : filteredAlignments.length === 0 ? (
                 <div className="p-6 text-center text-[#4a5568] text-xs flex flex-col items-center gap-2">
                   <span className="material-symbols-outlined text-[28px]">radar</span>
-                  {scanning ? 'Scanning 50+ stocks…' : 'No alignments yet — click Scan Now or wait for 9:20 AM scan'}
+                  {alignments.length > 0
+                    ? (
+                      <>
+                        <span className="text-[#ffa858] font-bold">
+                          {alignments.length} result{alignments.length !== 1 ? 's' : ''} found — all below {minScore}% threshold
+                        </span>
+                        <span className="text-[#4a5568]">
+                          Market may be bearish. Lower min score to see partial matches.
+                        </span>
+                      </>
+                    )
+                    : 'No alignments yet — click Scan Now or wait for 9:20 AM scan'
+                  }
                 </div>
               ) : (
-                alignments.map((a, i) => (
+                filteredAlignments.map((a, i) => (
                   <AlignmentCard
                     key={`${a.symbol}-${a.strategy_id}-${i}`}
                     alignment={a}
