@@ -548,6 +548,96 @@ function getDailyPnl(strategyId) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// STRATEGY PERFORMANCE ANALYTICS
+// Uses _closedTrades; strategy_type maps to registry id.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function getStrategyPerformance(strategyId, days = 30) {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+
+  // _closedTrades use strategy_type for registry id, exit_time for close time
+  const trades = _closedTrades.filter(t =>
+    (!strategyId || t.strategy_type === strategyId) &&
+    t.exit_time &&
+    new Date(t.exit_time) >= cutoff
+  );
+
+  if (trades.length === 0) return {
+    strategy_id:    strategyId,
+    period_days:    days,
+    total_trades:   0,
+    winning_trades: 0,
+    losing_trades:  0,
+    win_rate:       0,
+    avg_win:        0,
+    avg_loss:       0,
+    expectancy:     0,
+    profit_factor:  0,
+    avg_hold_days:  0,
+    total_pnl:      0,
+    max_drawdown:   0,
+    best_trade:     null,
+    worst_trade:    null,
+    exit_reasons:   { TARGET_HIT: 0, STOP_LOSS_HIT: 0, TRAILING_SL: 0, TIME_STOP: 0 },
+  };
+
+  const wins   = trades.filter(t => t.pnl > 0);
+  const losses = trades.filter(t => t.pnl <= 0);
+
+  const winRate   = wins.length / trades.length;
+  const avgWin    = wins.length > 0
+    ? wins.reduce((s, t) => s + t.pnl, 0) / wins.length : 0;
+  const avgLoss   = losses.length > 0
+    ? Math.abs(losses.reduce((s, t) => s + t.pnl, 0) / losses.length) : 0;
+  const expectancy = winRate * avgWin - (1 - winRate) * avgLoss;
+
+  const totalWins  = wins.reduce((s, t) => s + t.pnl, 0);
+  const totalLoss  = Math.abs(losses.reduce((s, t) => s + t.pnl, 0));
+  const profitFactor = totalLoss > 0 ? totalWins / totalLoss : totalWins > 0 ? 99 : 0;
+
+  // Max drawdown on running P&L curve
+  let peak = 0, maxDD = 0, running = 0;
+  trades.forEach(t => {
+    running += t.pnl;
+    if (running > peak) peak = running;
+    const dd = peak - running;
+    if (dd > maxDD) maxDD = dd;
+  });
+
+  const avgHoldDays = trades.reduce((s, t) => {
+    const ms = new Date(t.exit_time) - new Date(t.entry_time);
+    return s + ms / (1000 * 60 * 60 * 24);
+  }, 0) / trades.length;
+
+  const sorted = [...trades].sort((a, b) => b.pnl - a.pnl);
+
+  return {
+    strategy_id:    strategyId,
+    period_days:    days,
+    total_trades:   trades.length,
+    winning_trades: wins.length,
+    losing_trades:  losses.length,
+    win_rate:       +(winRate * 100).toFixed(1),
+    avg_win:        +avgWin.toFixed(0),
+    avg_loss:       +avgLoss.toFixed(0),
+    expectancy:     +expectancy.toFixed(0),
+    profit_factor:  +profitFactor.toFixed(2),
+    avg_hold_days:  +avgHoldDays.toFixed(1),
+    total_pnl:      +trades.reduce((s, t) => s + t.pnl, 0).toFixed(0),
+    max_drawdown:   +maxDD.toFixed(0),
+    best_trade:     sorted[0] || null,
+    worst_trade:    sorted[sorted.length - 1] || null,
+    exit_reasons: {
+      TARGET_HIT:    trades.filter(t => t.exit_reason === 'TARGET_HIT').length,
+      STOP_LOSS_HIT: trades.filter(t => t.exit_reason === 'STOP_LOSS_HIT').length,
+      TRAILING_SL:   trades.filter(t => t.exit_reason === 'TRAILING_SL_HIT').length,
+      TIME_STOP:     trades.filter(t => t.exit_reason === 'MAX_HOLD_DAYS').length,
+    },
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // SECTION 1C: checkStrategyAlignment
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1155,6 +1245,7 @@ const algoEngine = {
   getLogs()                { return _engineLogs; },
   getDailyPnlForStrategy:  getDailyPnl,
   getDailyPnl:             getDailyPnl,
+  getStrategyPerformance:  getStrategyPerformance,
   getAlignmentResults()    { return _alignmentResults; },
   getLastScanTime()        { return _lastScanTime; },
   getStrategyRegistry()    { return STRATEGY_REGISTRY; },

@@ -285,6 +285,10 @@ export default function Algo() {
   const [showLiveModal, setShowLiveModal] = useState(false)
   const [brokerName,    setBrokerName]    = useState('yfinance')
 
+  // Performance Monitor
+  const [perf,     setPerf]     = useState(null)
+  const [perfDays, setPerfDays] = useState(30)
+
   // Banners
   const [stopBanner,    setStopBanner]    = useState(false)
   const [lossLimitBanner, setLossLimitBanner] = useState(null)
@@ -337,6 +341,14 @@ export default function Algo() {
     }, 30_000)
     return () => clearInterval(id)
   }, [])
+
+  // Fetch performance data; re-runs when perfDays changes
+  useEffect(() => {
+    fetch(`http://localhost:5000/api/algo/performance?days=${perfDays}`)
+      .then(r => r.json())
+      .then(setPerf)
+      .catch(() => {})
+  }, [perfDays])
 
   // ── socket.io ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -911,6 +923,145 @@ export default function Algo() {
         </section>
 
       </div>
+
+      {/* ── Performance Monitor ───────────────────────────────────────────── */}
+      <div className="mt-6 border-t border-[#1e293b] pt-6 px-6 pb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-bold text-[#d8e3fb] uppercase tracking-wider flex items-center gap-2">
+            <span className="material-symbols-outlined text-[16px] text-[#00d4aa]">analytics</span>
+            Strategy Performance Monitor
+          </h2>
+          <div className="flex gap-1">
+            {[7, 30, 90].map(d => (
+              <button
+                key={d}
+                onClick={() => setPerfDays(d)}
+                className={`px-3 py-1 rounded text-[10px] font-bold transition-colors border ${
+                  perfDays === d
+                    ? 'bg-[#00d4aa] text-[#005643] border-[#00d4aa]'
+                    : 'text-[#bacac2] border-[#2a3548] hover:border-[#00d4aa]/40'
+                }`}
+              >
+                {d}D
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {!perf || perf.overall?.total_trades === 0 ? (
+          <div className="text-center py-8 text-[#4a5568] text-sm">
+            No closed trades yet — performance data appears after first trades complete
+          </div>
+        ) : (
+          <>
+            {/* Overall metrics row */}
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 mb-4">
+              {[
+                { label: 'Total Trades',  val: perf.overall.total_trades,  color: '#d8e3fb' },
+                { label: 'Win Rate',      val: perf.overall.win_rate + '%',
+                  color: perf.overall.win_rate >= 55 ? '#00d4aa' : perf.overall.win_rate >= 45 ? '#ffa858' : '#ffb4ab' },
+                { label: 'Profit Factor', val: perf.overall.profit_factor,
+                  color: perf.overall.profit_factor >= 1.5 ? '#00d4aa' : '#ffa858' },
+                { label: 'Expectancy',    val: '₹' + perf.overall.expectancy,
+                  color: perf.overall.expectancy > 0 ? '#00d4aa' : '#ffb4ab' },
+                { label: 'Total P&L',     val: '₹' + perf.overall.total_pnl,
+                  color: perf.overall.total_pnl >= 0 ? '#00d4aa' : '#ffb4ab' },
+                { label: 'Max Drawdown',  val: '₹' + perf.overall.max_drawdown, color: '#ffa858' },
+              ].map(m => (
+                <div key={m.label} className="bg-[#0d1829] rounded-lg p-3 border border-[#1e293b]">
+                  <div className="text-[9px] text-[#4a5568] uppercase tracking-wide mb-1">{m.label}</div>
+                  <div className="text-lg font-bold font-mono" style={{ color: m.color }}>{m.val}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Per-strategy breakdown table */}
+            <div className="overflow-hidden rounded-xl border border-[#1e293b]">
+              <div className="grid grid-cols-10 px-3 py-2 bg-[#0d1829] text-[9px] font-bold text-[#4a5568] uppercase tracking-wider">
+                <div className="col-span-2">Strategy</div>
+                <div className="text-center">Trades</div>
+                <div className="text-center">Win %</div>
+                <div className="text-center">Avg Win</div>
+                <div className="text-center">Avg Loss</div>
+                <div className="text-center">Expectancy</div>
+                <div className="text-center">P Factor</div>
+                <div className="text-center">Avg Days</div>
+                <div className="text-center">Status</div>
+              </div>
+              <div className="divide-y divide-[#0d1829]">
+                {(perf.strategies || []).map(s => (
+                  <div
+                    key={s.strategy_id}
+                    className="grid grid-cols-10 px-3 py-3 items-center hover:bg-[#0d1829] transition-colors"
+                  >
+                    <div className="col-span-2">
+                      <div className="text-xs font-bold text-[#d8e3fb]">{s.strategy_name}</div>
+                      <div className={`text-[8px] font-bold mt-0.5 ${
+                        s.risk_profile === 'conservative' ? 'text-[#00d4aa]'
+                        : s.risk_profile === 'aggressive' ? 'text-[#ffb4ab]'
+                        : 'text-[#ffa858]'
+                      }`}>
+                        {s.risk_profile?.toUpperCase()}
+                      </div>
+                    </div>
+                    <div className="text-center text-xs font-mono text-[#bacac2]">
+                      {s.total_trades}
+                      <span className="text-[#4a5568] text-[9px] ml-1">({s.winning_trades}W/{s.losing_trades}L)</span>
+                    </div>
+                    <div className="text-center">
+                      <span className={`text-xs font-mono font-bold ${
+                        s.win_rate >= 55 ? 'text-[#00d4aa]' : s.win_rate >= 45 ? 'text-[#ffa858]' : 'text-[#ffb4ab]'
+                      }`}>{s.win_rate}%</span>
+                    </div>
+                    <div className="text-center text-xs font-mono text-[#00d4aa]">₹{s.avg_win}</div>
+                    <div className="text-center text-xs font-mono text-[#ffb4ab]">₹{s.avg_loss}</div>
+                    <div className="text-center">
+                      <span className={`text-xs font-mono font-bold ${
+                        s.expectancy > 0 ? 'text-[#00d4aa]' : 'text-[#ffb4ab]'
+                      }`}>₹{s.expectancy}</span>
+                    </div>
+                    <div className="text-center">
+                      <span className={`text-xs font-mono font-bold ${
+                        s.profit_factor >= 1.5 ? 'text-[#00d4aa]'
+                        : s.profit_factor >= 1.0 ? 'text-[#ffa858]'
+                        : 'text-[#ffb4ab]'
+                      }`}>{s.profit_factor}</span>
+                    </div>
+                    <div className="text-center text-xs font-mono text-[#bacac2]">{s.avg_hold_days}d</div>
+                    <div className="text-center">
+                      <span className={`text-[9px] font-bold px-2 py-0.5 rounded ${
+                        s.status === 'ACTIVE'
+                          ? 'bg-[#00d4aa]/15 text-[#00d4aa]'
+                          : 'bg-[#1e293b] text-[#4a5568]'
+                      }`}>{s.status}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Exit reason breakdown */}
+            {perf.overall.exit_reasons && Object.values(perf.overall.exit_reasons).some(v => v > 0) && (
+              <div className="mt-3 flex gap-3 flex-wrap items-center">
+                <span className="text-[9px] text-[#4a5568] uppercase tracking-wide">Exit reasons:</span>
+                {Object.entries(perf.overall.exit_reasons).map(([reason, count]) =>
+                  count > 0 && (
+                    <div key={reason} className="flex items-center gap-1.5 text-[10px]">
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${
+                        reason === 'TARGET_HIT'    ? 'bg-[#00d4aa]'
+                        : reason.includes('SL')   ? 'bg-[#ffb4ab]'
+                        : 'bg-[#ffa858]'
+                      }`} />
+                      <span className="text-[#bacac2]">{reason.replace(/_/g, ' ')}: {count}</span>
+                    </div>
+                  )
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
     </main>
   )
 }

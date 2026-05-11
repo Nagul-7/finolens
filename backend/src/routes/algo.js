@@ -328,6 +328,23 @@ router.get("/pnl/today", (_req, res) => {
   });
 });
 
+// GET /api/algo/performance  — per-strategy performance breakdown
+router.get("/performance", (req, res) => {
+  const days     = Math.max(1, parseInt(req.query.days) || 30);
+  const registry = algoEngine.getStrategyRegistry();
+
+  const strategies = registry.map(s => ({
+    ...algoEngine.getStrategyPerformance(s.id, days),
+    strategy_name: s.name,
+    status:        (algoEngine.getStrategies().find(i => i.strategy_type === s.id) || {}).status || "PAUSED",
+    risk_profile:  s.risk_profile,
+  }));
+
+  const overall = algoEngine.getStrategyPerformance(null, days);
+
+  return res.json({ strategies, overall, period_days: days });
+});
+
 // GET /api/algo/performance/summary  — 30-day summary across all strategies
 router.get("/performance/summary", (_req, res) => {
   const closed = algoEngine.getClosedTrades();
