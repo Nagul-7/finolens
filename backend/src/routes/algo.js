@@ -322,6 +322,8 @@ router.get("/pnl/today", (_req, res) => {
     win_rate_today:   win_rate,
     best_strategy:    bestEntry?.strategy_name ?? null,
     by_strategy,
+    open_positions_list: positions,
+    trade_history:    algoEngine.getTradeHistory().slice(-20),
     timestamp:        new Date().toISOString(),
   });
 });

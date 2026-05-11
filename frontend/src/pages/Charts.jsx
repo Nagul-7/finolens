@@ -755,10 +755,14 @@ export default function Charts() {
   const [showToolsMenu,  setShowToolsMenu]  = useState(false)
   const [activeTool,     setActiveTool]     = useState('cursor')
   const [pendingIndType, setPendingIndType] = useState(null)
-  const [indicators, setIndicators] = useState([
-    { id: 1, type: 'EMA', params: { period: 9  } },
-    { id: 2, type: 'EMA', params: { period: 21 } },
-  ])
+  const [indicators, setIndicators] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem('charts_indicators')
+      return saved ? JSON.parse(saved) : []
+    } catch {
+      return []
+    }
+  })
 
   // ── Drawing state (managed via drawingEngine.js) ────────────────────────
   const [drawings,   setDrawings]   = useState([])
@@ -775,18 +779,35 @@ export default function Charts() {
   useEffect(() => { drawingsRef.current   = drawings   }, [drawings])
   useEffect(() => { selectedIdRef.current = selectedId }, [selectedId])
 
+  // Persist indicators to sessionStorage whenever they change
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('charts_indicators', JSON.stringify(indicators))
+    } catch {}
+  }, [indicators])
+
   // ── Drawings persistence ──────────────────────────────────────────────────
   const saveDrawingsForSymbol = useCallback((sym, list) => {
     if (!sym) return
     try { localStorage.setItem(`finolens_drawings_${sym}`, JSON.stringify(list)) } catch {}
   }, [])
 
-  // Load saved drawings whenever the active symbol changes
+  // Load saved drawings and restore saved indicators whenever the active symbol changes
   useEffect(() => {
     if (!symbol) { setDrawings([]); return }
     try {
-      const saved = localStorage.getItem(`finolens_drawings_${symbol}`)
-      setDrawings(saved ? JSON.parse(saved) : [])
+      const savedDrawings = localStorage.getItem(`finolens_drawings_${symbol}`)
+      setDrawings(savedDrawings ? JSON.parse(savedDrawings) : [])
+
+      // Restore saved indicators for this symbol
+      const analyses = JSON.parse(localStorage.getItem('finolens_saved_analyses') || '{}')
+      if (analyses[symbol]?.indicators?.length > 0 &&
+          Array.isArray(analyses[symbol].indicators) &&
+          typeof analyses[symbol].indicators[0] === 'object') {
+        setIndicators(analyses[symbol].indicators)
+        setSaveToast(`Restored saved analysis for ${symbol}`)
+        setTimeout(() => setSaveToast(''), 3000)
+      }
     } catch { setDrawings([]) }
     setHistory([])
     setSelectedId(null)
@@ -912,7 +933,14 @@ export default function Charts() {
       saved[symbol] = {
         savedAt: new Date().toISOString(),
         drawingCount: drawings.length,
-        indicators: indicators.map(i => i.type),
+        indicators: indicators,  // full objects so they can be restored exactly
+        indicatorSummary: indicators.map(i =>
+          i.type === 'EMA'
+            ? `EMA(${i.params.period})`
+            : i.type === 'BB'
+            ? `BB(${i.params.period},${i.params.std})`
+            : i.type
+        ),
         timeframe,
       }
       localStorage.setItem('finolens_saved_analyses', JSON.stringify(saved))

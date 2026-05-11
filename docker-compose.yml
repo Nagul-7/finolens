@@ -10,7 +10,7 @@ services:
       POSTGRES_USER: finolens
       POSTGRES_PASSWORD: finolens_secret
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
@@ -26,7 +26,7 @@ services:
     container_name: finolens-redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "6380:6379"
     command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -71,6 +71,8 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"
+    environment:
+      - BACKEND_URL=http://finolens-backend:5000
     depends_on:
       - backend
 

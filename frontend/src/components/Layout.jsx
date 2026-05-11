@@ -8,44 +8,39 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen bg-[#081425] text-[#d8e3fb]">
-      <TopBar />
+      <TopBar onQuipClick={() => setQuipOpen(true)} />
       <div className="pt-14 pb-16">
         <Outlet />
       </div>
       <BottomNav />
 
-      {/* Quip floating button — visible on every tab */}
-      <button
-        onClick={() => setQuipOpen(true)}
-        className="fixed bottom-20 right-4 w-12 h-12 rounded-full bg-[#00d4aa] flex items-center justify-center shadow-lg hover:bg-[#46f1c5] transition-colors z-40"
-        title="Quip AI"
-      >
-        <span className="material-symbols-outlined text-[#005643] text-[22px]">chat</span>
-      </button>
-
       {/* Quip modal */}
       {quipOpen && (
         <div
-          className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center"
+          className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center"
           onClick={() => setQuipOpen(false)}
         >
           <div
-            className="bg-[#111c2d] border border-[#2a3548] rounded-xl p-6 w-80 shadow-2xl"
+            className="bg-[#111c2d] border border-[#2a3548] rounded-2xl p-8 max-w-sm w-full mx-4 text-center shadow-2xl"
             onClick={e => e.stopPropagation()}
           >
-            <div className="flex justify-between items-center mb-4">
-              <span className="text-sm font-bold text-[#d8e3fb]">Quip Integration</span>
-              <button onClick={() => setQuipOpen(false)} className="text-[#bacac2] hover:text-[#d8e3fb] transition-colors">
-                <span className="material-symbols-outlined text-[18px]">close</span>
-              </button>
-            </div>
-            <div className="text-center p-2">
-              <span className="material-symbols-outlined text-[48px] text-[#00d4aa]">chat</span>
-              <p className="text-[#d8e3fb] mt-3 font-bold">Quip Integration</p>
-              <p className="text-[#bacac2] text-sm mt-1">
-                Coming soon — AI fundamental analysis will appear here alongside FinoLens signals
-              </p>
-            </div>
+            <span className="material-symbols-outlined text-[56px] text-[#00d4aa]">
+              psychology
+            </span>
+            <h2 className="text-[#d8e3fb] text-lg font-bold mt-3">
+              Quip AI Integration
+            </h2>
+            <p className="text-[#bacac2] text-sm mt-2 leading-relaxed">
+              Fundamental analysis AI will appear here alongside FinoLens technical
+              signals, giving you a combined call.
+            </p>
+            <p className="text-[#4a5568] text-xs mt-3">Coming soon</p>
+            <button
+              onClick={() => setQuipOpen(false)}
+              className="mt-5 px-6 py-2 rounded-lg bg-[#1e293b] text-[#bacac2] text-sm hover:bg-[#2a3548] transition-colors"
+            >
+              Close
+            </button>
           </div>
         </div>
       )}

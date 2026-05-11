@@ -11,7 +11,7 @@ function isMarketOpen() {
   return mins >= 555 && mins <= 930
 }
 
-export default function TopBar() {
+export default function TopBar({ onQuipClick }) {
   const navigate = useNavigate()
   const [nifty, setNifty]         = useState(null)
   const [banknifty, setBanknifty] = useState(null)
@@ -85,6 +85,15 @@ export default function TopBar() {
             {open ? 'MARKET OPEN' : 'MARKET CLOSED'}
           </span>
         </div>
+        {/* Quip AI button — opens the Quip modal */}
+        <button
+          onClick={onQuipClick}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#00d4aa]/30 bg-[#00d4aa]/10 text-[#00d4aa] text-xs font-bold hover:bg-[#00d4aa]/20 transition-colors"
+          title="Quip AI Analysis"
+        >
+          <span className="material-symbols-outlined text-[15px]">psychology</span>
+          <span className="hidden sm:inline">Quip AI</span>
+        </button>
         <button className="p-1.5 rounded text-slate-400 hover:bg-[#1e293b] transition-colors">
           <span className="material-symbols-outlined text-[20px]">notifications</span>
         </button>

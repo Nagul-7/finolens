@@ -521,15 +521,30 @@ function getTodayIST() {
 function getDailyPnl(strategyId) {
   const today    = getTodayIST();
   const realized = _closedTrades
-    .filter(t => t.strategy_id === strategyId &&
+    .filter(t =>
+      (!strategyId || t.strategy_id === strategyId) &&
       new Date(t.exit_time)
         .toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
         .startsWith(today))
     .reduce((sum, t) => sum + (t.pnl || 0), 0);
   const unrealized = _openPositions
-    .filter(p => p.strategy_id === strategyId)
+    .filter(p => !strategyId || p.strategy_id === strategyId)
     .reduce((sum, p) => sum + (p.pnl || 0), 0);
-  return { realized, unrealized, total: realized + unrealized };
+  const todayTrades = _closedTrades.filter(t =>
+    (!strategyId || t.strategy_id === strategyId) &&
+    t.exit_time &&
+    new Date(t.exit_time)
+      .toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
+      .startsWith(today)
+  );
+  return {
+    realized,
+    unrealized,
+    total:       realized + unrealized,
+    trade_count: todayTrades.length,
+    wins:        todayTrades.filter(t => t.pnl > 0).length,
+    losses:      todayTrades.filter(t => t.pnl <= 0).length,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -747,9 +762,17 @@ async function scanStockAlignment() {
 
   for (const symbol of SCAN_UNIVERSE) {
     try {
+      const toDate   = new Date()
+      const fromDate = new Date()
+      fromDate.setFullYear(fromDate.getFullYear() - 1)
+      const from = fromDate.toISOString().split('T')[0]
+      const to   = toDate.toISOString().split('T')[0]
+      const from3y = new Date()
+      from3y.setFullYear(from3y.getFullYear() - 3)
+
       const [dailyRes, weeklyRes] = await Promise.all([
-        ML.get(`/market/ohlcv/${symbol}`, { params: { interval: "1d",  period: "6mo" } }),
-        ML.get(`/market/ohlcv/${symbol}`, { params: { interval: "1wk", period: "2y"  } }),
+        ML.get(`/market/ohlcv/${symbol}`, { params: { interval: "1d",  from, to } }),
+        ML.get(`/market/ohlcv/${symbol}`, { params: { interval: "1wk", from: from3y.toISOString().split('T')[0], to } }),
       ]);
 
       const dailyBars  = dailyRes.data;
@@ -761,7 +784,7 @@ async function scanStockAlignment() {
 
         const aligned = checkStrategyAlignment(strategy, dailyBars, weeklyBars, symbol);
 
-        if (aligned.score >= 70) {
+        if (aligned.score >= 55) {
           alignments.push({
             symbol,
             strategy_id:      strategy.id,
@@ -805,7 +828,7 @@ async function scanStockAlignment() {
     });
 
     // Individual high-confidence alerts (score >= 85)
-    for (const a of alignments.filter(x => x.alignment_score >= 85)) {
+    for (const a of alignments.filter(x => x.alignment_score >= 70)) {
       _io.emit("strategy_alert", {
         type:             "STRATEGY_ALIGNMENT",
         symbol:           a.symbol,
@@ -1001,9 +1024,17 @@ const algoEngine = {
       if (openSymbols.has(symbol)) continue;
 
       try {
+        const toDateE   = new Date()
+        const fromDateE = new Date()
+        fromDateE.setFullYear(fromDateE.getFullYear() - 1)
+        const fromE  = fromDateE.toISOString().split('T')[0]
+        const toE    = toDateE.toISOString().split('T')[0]
+        const from3yE = new Date()
+        from3yE.setFullYear(from3yE.getFullYear() - 3)
+
         const [dailyRes, weeklyRes] = await Promise.all([
-          ML.get(`/market/ohlcv/${symbol}`, { params: { interval: "1d",  period: "6mo" } }),
-          ML.get(`/market/ohlcv/${symbol}`, { params: { interval: "1wk", period: "2y"  } }),
+          ML.get(`/market/ohlcv/${symbol}`, { params: { interval: "1d",  from: fromE, to: toE } }),
+          ML.get(`/market/ohlcv/${symbol}`, { params: { interval: "1wk", from: from3yE.toISOString().split('T')[0], to: toE } }),
         ]);
 
         const dailyBars  = dailyRes.data;
@@ -1011,7 +1042,7 @@ const algoEngine = {
         if (!dailyBars || dailyBars.length < 50) continue;
 
         const aligned = checkStrategyAlignment(regEntry, dailyBars, weeklyBars, symbol);
-        if (aligned.score < 70) continue;
+        if (aligned.score < 65) continue;
 
         const ltp = parseFloat(dailyBars[dailyBars.length - 1].close);
         if (!ltp || ltp <= 0) continue;
@@ -1120,8 +1151,10 @@ const algoEngine = {
   getStrategies()          { return _strategies; },
   getOpenPositions()       { return _openPositions; },
   getClosedTrades()        { return _closedTrades; },
+  getTradeHistory()        { return _closedTrades; },
   getLogs()                { return _engineLogs; },
   getDailyPnlForStrategy:  getDailyPnl,
+  getDailyPnl:             getDailyPnl,
   getAlignmentResults()    { return _alignmentResults; },
   getLastScanTime()        { return _lastScanTime; },
   getStrategyRegistry()    { return STRATEGY_REGISTRY; },

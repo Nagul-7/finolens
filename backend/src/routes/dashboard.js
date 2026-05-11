@@ -29,7 +29,7 @@ router.get("/", async (req, res) => {
     const [indexResult, signalResults] = await Promise.allSettled([
       ML.get("/market/index"),
       Promise.allSettled(
-        TOP_SYMBOLS.map((s) => ML.get(`/signals/${s}`))
+        TOP_SYMBOLS.map((s) => ML.get(`/technical/${s}`))
       ),
     ]);
 
@@ -47,21 +47,23 @@ router.get("/", async (req, res) => {
         if (r.status !== "fulfilled") return;
         const d   = r.value.data;
         const sym = TOP_SYMBOLS[i];
-        if (d.call !== "NEUTRAL") {
+        // /technical returns: signal (BUY/SELL/NEUTRAL), technical_score, confidence, current_price, stop_loss, target
+        const signal = d.signal || d.call || 'NEUTRAL';
+        if (signal !== "NEUTRAL") {
           active_calls.push({
             symbol: sym,
-            signal_type: d.call,
-            confidence: d.confidence,
-            entry_price: d.current_price,
-            stop_loss: d.stop_loss,
-            target: d.target,
+            signal_type: signal,
+            confidence: d.confidence || d.technical_score || 50,
+            entry_price: d.current_price || 0,
+            stop_loss: d.stop_loss || 0,
+            target: d.target || 0,
             trigger_reason: d.signals?.[0]?.reason || "",
             signal_breakdown: {
-              technical: Math.round(d.confidence * 0.9),
-              volume:    Math.round(d.confidence * 0.7),
-              ml:        Math.round(d.confidence * 0.85),
-              options:   Math.round(d.confidence * 0.75),
-              sentiment: Math.round(d.confidence * 0.6),
+              technical: Math.round((d.technical_score || 50) * 0.9),
+              volume:    Math.round((d.volume_score   || 50) * 0.7),
+              ml:        Math.round((d.technical_score || 50) * 0.85),
+              options:   Math.round((d.technical_score || 50) * 0.75),
+              sentiment: Math.round((d.technical_score || 50) * 0.6),
             },
           });
         }
